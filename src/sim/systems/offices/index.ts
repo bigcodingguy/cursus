@@ -1,0 +1,407 @@
+// Offices: the annual magistrates, governors abroad, military service, and the quaestorian election.
+
+import { CAMPAIGNS, CANVASS_ZONES, FASTI, HISTORICAL_GOVERNORS, OFFICES, PROVINCES, QUAESTOR_ELECTION, type CanvassZone } from '../../../content/offices';
+import { OUTSIDE_NOMINA, PRAENOMINA } from '../../../content/cast';
+import { TRIBES } from '../../../content/offices';
+import { emit, on } from '../../bus';
+import { dateOf, dayOf } from '../../calendar';
+import { registerAction, registerCommand, type SystemDef } from '../../core';
+import { chance, fork, gauss, pick, rand, randInt } from '../../rng';
+import type { Character, CharId, Election, GameState, OfficeId } from '../../types';
+import { ageOf, byHistorical, clamp, fullName, shortName, yearBC } from '../../util';
+import { cashOf } from '../money/api';
+import { standingOf } from '../standing/api';
+import { candidacyOf, FORECAST_RUNS, forecastRuns, heldEver, openElection, profiles, quaestorIneligible, voteOnce } from './api';
+
+
+function record(s: GameState, who: CharId, office: OfficeId, y: number) {
+  if (s.offices.records.some((r) => r.who === who && r.office === office && r.yearBC === y)) return;
+  emit(s, 'office.won', { who, office, yearBC: y });
+}
+
+function eligibleFor(s: GameState, c: Character, office: OfficeId, y: number): boolean {
+  if (!c.alive || c.female || c.flags.exiled || c.location === 'exile') return false;
+  if (c.bornBC - y < OFFICES[office].minAge) return false;
+  const held = (o: OfficeId) => s.offices.records.some((r) => r.who === c.id && r.office === o && r.yearBC > y);
+  if (office === 'praetor') return held('quaestor') && !held('praetor') && !held('consul');
+  if (office === 'consul') return held('praetor') && !s.offices.records.some((r) => r.who === c.id && r.office === 'consul' && r.yearBC > y && r.yearBC - y < 10);
+  return true;
+}
+
+/** Senior elections are abstracted: the likeliest men by name and favor take the seats. */
+function fillSeats(s: GameState, office: OfficeId, y: number, seats: number, preset: string[]) {
+  const chosen: CharId[] = [];
+  const busy = (id: CharId) => s.offices.records.some((r) => r.who === id && r.yearBC === y && r.office !== 'military_tribune');
+  for (const key of preset) {
+    const c = byHistorical(s, key);
+    if (c && c.alive && !c.flags.exiled && c.location !== 'exile' && chosen.length < seats && !busy(c.id)) chosen.push(c.id);
+  }
+  const pool = Object.values(s.chars).filter((c) => !chosen.includes(c.id) && c.id !== s.playerId && !busy(c.id) && eligibleFor(s, c, office, y));
+  while (chosen.length < seats && pool.length) {
+    const score = (c: Character) => Math.exp(0.04 * standingOf(s, c.id, 'dignitas').total + 0.01 * standingOf(s, c.id, 'boni').total + c.traits.ambition);
+    let total = 0;
+    for (const c of pool) total += score(c);
+    let x = rand(s.rng) * total;
+    let idx = 0;
+    for (; idx < pool.length - 1; idx++) {
+      x -= score(pool[idx]);
+      if (x < 0) break;
+    }
+    chosen.push(pool[idx].id);
+    pool.splice(idx, 1);
+  }
+  for (const id of chosen) record(s, id, office, y);
+}
+
+function newElection(s: GameState): Election {
+  const y = yearBC(s);
+  return {
+    id: `q${y - 1}`,
+    office: 'quaestor',
+    forYearBC: y - 1,
+    seats: QUAESTOR_ELECTION.seats,
+    day: dayOf(y, QUAESTOR_ELECTION.month, QUAESTOR_ELECTION.dom),
+    professioDeadline: dayOf(y, QUAESTOR_ELECTION.month, QUAESTOR_ELECTION.dom) - QUAESTOR_ELECTION.professioDays,
+    candidates: [],
+    status: 'open',
+    postponements: 0,
+  };
+}
+
+function declare(s: GameState, who: CharId) {
+  const e = openElection(s);
+  if (!e || e.candidates.some((c) => c.who === who)) return;
+  const groundwork = s.offices.groundwork[who] ?? {};
+  e.candidates.push({ who, canvass: { ...groundwork }, bribes: {}, endorsements: [], declaredDay: s.day });
+  delete s.offices.groundwork[who];
+  const c = s.chars[who];
+  emit(s, 'log', { text: `${fullName(c)} declares himself a candidate for the quaestorship.`, kind: 'election', about: [who] });
+}
+
+/** Men from houses outside the cast who come forward. They join the cast and play by its rules. */
+function spawnOutsiders(s: GameState, e: Election) {
+  const [lo, hi] = QUAESTOR_ELECTION.fieldMargin;
+  const want = e.seats + randInt(s.rng, lo, hi);
+  let n = 0;
+  while (e.candidates.length < want && n++ < 20) {
+    const id = `c${s.nextCharId++}`;
+    const nomenFull = pick(s.rng, OUTSIDE_NOMINA).split(' ');
+    const anc = randInt(s.rng, 0, 3);
+    const famId = `out_${id}`;
+    s.families[famId] = { id: famId, name: nomenFull[0], patrician: false, consulAncestors: anc, praetorAncestors: randInt(s.rng, 0, 2), home: 'carinae' };
+    const bornBC = e.forYearBC + randInt(s.rng, 27, 33);
+    const c: Character = {
+      id, praenomen: pick(s.rng, PRAENOMINA), nomen: nomenFull[0], cognomen: nomenFull[1], female: false, familyId: famId, bornBC, alive: true,
+      rank: 'eques', traits: { ambition: 0.6 + 0.4 * rand(s.rng), greed: rand(s.rng), boldness: rand(s.rng), loyalty: rand(s.rng), sociability: rand(s.rng), pride: rand(s.rng) },
+      lean: clamp(0.2 + 0.5 * gauss(s.rng), -1, 1), oratory: 25 + 30 * rand(s.rng), law: 20 + 30 * rand(s.rng), location: 'rome', home: 'carinae',
+      tribe: pick(s.rng, TRIBES), servedAbroad: randInt(s.rng, 1, 4), busyUntil: 0, nextThink: s.day + randInt(s.rng, 1, 7), flags: { outsider: 1 },
+      bio: 'A candidate from a house outside your acquaintance.',
+    };
+    s.chars[id] = c;
+    s.money.accounts[id] = { cash: 0, income: 30000 + 40000 * rand(s.rng), upkeep: 30000 };
+    emit(s, 'transfer', { from: null, to: id, amount: 20000 + Math.round(60000 * rand(s.rng)), reason: 'estates' });
+    emit(s, 'standing', { who: id, kind: 'dignitas', value: Math.round(6 + 10 * rand(s.rng)), label: 'Military service', halfLife: 0 });
+    emit(s, 'standing', { who: id, kind: 'people', value: Math.round(25 * gauss(s.rng) + 15), label: 'Reputation in the city' });
+    emit(s, 'standing', { who: id, kind: 'boni', value: Math.round(25 * gauss(s.rng) + 18), label: 'Reputation among the boni' });
+    const groundwork: Record<string, number> = {};
+    for (const t of TRIBES) if (chance(s.rng, 0.6)) groundwork[t] = Math.round(rand(s.rng) * 6 * 10) / 10;
+    s.offices.groundwork[id] = groundwork;
+    declare(s, id);
+  }
+}
+
+function resolveElection(s: GameState, e: Election, playerSaw?: number) {
+  // With the player standing, the vote is one of the forecast runs picked at random, so the odds he saw are exact.
+  // Otherwise a single run with fresh luck.
+  const playerStands = e.candidates.some((c) => c.who === s.playerId);
+  const r = playerStands ? forecastRuns(s, e)[randInt(s.rng, 0, FORECAST_RUNS - 1)] : voteOnce(e, profiles(s, e), fork(s.rng, randInt(s.rng, 0, 1 << 30)));
+  e.status = 'held';
+  e.results = { ...r, forecastWin: playerSaw };
+  for (const id of r.winners) record(s, id, e.office, e.forYearBC);
+  for (const c of e.candidates) {
+    if (!r.winners.includes(c.who)) emit(s, 'standing', { who: c.who, kind: 'dignitas', value: -2, label: 'Defeated at the polls (repulsa)', halfLife: 1500 });
+  }
+  const names = r.winners.map((w) => shortName(s.chars[w])).join(', ');
+  emit(s, 'log', { text: `The tribes elect the quaestors for ${e.forYearBC} BC: ${names}.`, kind: 'election', about: r.winners });
+  emit(s, 'news', { text: `The new quaestors are ${names}.`, truth: 'true', delay: 0, about: r.winners });
+  emit(s, 'election.held', { electionId: e.id, winners: r.winners });
+  const pc = e.candidates.find((c) => c.who === s.playerId);
+  if (pc) {
+    const won = r.winners.includes(s.playerId);
+    const t = r.tally[s.playerId];
+    emit(s, 'event.trigger', { eventId: won ? 'election_won' : 'election_lost', vars: { tribes: t?.tribes ?? 0, votes: t?.votes ?? 0, year: e.forYearBC } });
+  }
+}
+
+export const offices: SystemDef = {
+  id: 'offices',
+  register() {
+    on('office.won', (s, e) => {
+      s.offices.records.push({ who: e.who, office: e.office, yearBC: e.yearBC });
+      const def = OFFICES[e.office];
+      const label = `${def.label}, ${e.yearBC} BC`;
+      emit(s, 'standing', { who: e.who, kind: 'dignitas', value: def.dignitas, label, halfLife: 0 });
+    });
+    on('election.postpone', (s, e) => {
+      const el = openElection(s);
+      if (!el || el.office !== e.office) return;
+      el.day += e.days;
+      el.postponements += 1;
+      emit(s, 'log', { text: `The elections are postponed ${e.days} days: ${e.reason}.`, kind: 'election' });
+    });
+    on('death', (s, e) => {
+      for (const el of s.offices.elections) if (el.status === 'open') el.candidates = el.candidates.filter((c) => c.who !== e.who);
+    });
+
+    registerCommand('election.vote', (s) => {
+      const e = openElection(s);
+      if (!e || e.day > s.day) return 'No vote today';
+      const runs = forecastRuns(s, e);
+      const p = runs.filter((r) => r.winners.includes(s.playerId)).length / runs.length;
+      resolveElection(s, e, p);
+      return null;
+    });
+
+    registerAction({
+      id: 'declare',
+      label: 'Declare your candidacy for the quaestorship',
+      blurb: 'Give your name to the presiding consul (professio). Canvassing done beforehand counts.',
+      place: 'campus',
+      duration: () => 0,
+      check: (s, a) => {
+        const e = openElection(s);
+        if (!e) return 'No election is open (candidacies open on the Kalends of Iunius)';
+        if (s.day > e.professioDeadline) return 'Too late to declare this year';
+        if (e.candidates.some((c) => c.who === a.id)) return 'Already a candidate';
+        return quaestorIneligible(s, a, e.forYearBC);
+      },
+      complete: (s, a) => declare(s, a.id),
+      npc: (s, a) => {
+        const e = openElection(s);
+        if (!e || a.id === s.playerId || s.day > e.professioDeadline || quaestorIneligible(s, a, e.forYearBC)) return [];
+        // Men history has marked for the tribunate that year keep themselves free for it.
+        if (a.historical && FASTI[e.forYearBC]?.tribunes?.includes(a.historical)) return [];
+        if (e.candidates.some((c) => c.who === a.id)) return [];
+        const age = a.bornBC - e.forYearBC;
+        const urge = a.traits.ambition * (age >= 30 ? 1.5 : 1) + (a.historical ? 0.3 : 0) + 0.002 * standingOf(s, a.id, 'dignitas').total;
+        return [{ params: {}, utility: urge > 0.7 ? 6 : 0.5 }];
+      },
+    });
+
+    registerAction({
+      id: 'canvass',
+      label: 'Canvass for votes',
+      blurb: 'Shake hands, learn names, make promises. Effort builds up in the tribes you reach.',
+      place: (_s, _a, p) => (p.zone === 'subura' ? 'subura' : 'campus'),
+      duration: (_s, _a, p) => CANVASS_ZONES[(p.zone as CanvassZone) ?? 'subura'].days,
+      cost: (_s, _a, p) => CANVASS_ZONES[(p.zone as CanvassZone) ?? 'subura'].cost + Number(p.gifts ?? 0),
+      check: (s, a, p) => {
+        if (!CANVASS_ZONES[p.zone as CanvassZone]) return 'Choose where to canvass';
+        const e = openElection(s);
+        const nextFor = e ? e.forYearBC : yearBC(s) - 1;
+        if (a.bornBC - nextFor < OFFICES.quaestor.minAge - 1) return 'Too young to be canvassing yet (wait until the year before you can stand)';
+        if (heldEver(s, a.id, 'quaestor')) return 'You have held the quaestorship';
+        return null;
+      },
+      start: (s, a, p) => {
+        if (p.zone === 'arpinum') emit(s, 'travel', { who: a.id, to: 'arpinum', until: s.day + CANVASS_ZONES.arpinum.days });
+      },
+      complete: (s, a, p) => {
+        const z = CANVASS_ZONES[p.zone as CanvassZone];
+        const skill = 0.6 + a.oratory / 160 + a.traits.sociability * 0.3;
+        const per = (p.zone === 'campus' ? 0.5 : p.zone === 'subura' ? 1.5 : 2.5) * skill;
+        const cand = candidacyOf(s, a.id);
+        const target = cand ? cand.canvass : (s.offices.groundwork[a.id] ??= {});
+        for (const t of z.tribes) target[t] = (target[t] ?? 0) + per;
+        const gifts = Number(p.gifts ?? 0);
+        if (gifts > 0) {
+          if (cand) for (const t of z.tribes) cand.bribes[t] = (cand.bribes[t] ?? 0) + gifts / z.tribes.length;
+          emit(s, 'standing', { who: a.id, kind: 'boni', value: -Math.min(15, gifts / 3000), label: 'Talk of bribery (ambitus)' });
+          emit(s, 'standing', { who: a.id, kind: 'people', value: Math.min(6, gifts / 6000), label: 'Generous to voters' });
+          a.flags.ambitus = (a.flags.ambitus ?? 0) + gifts;
+          emit(s, 'news', { text: `Money is changing hands in the tribes for ${shortName(a)}, they say.`, truth: 'true', delay: 3, about: [a.id] });
+        }
+        emit(s, 'standing', { who: a.id, kind: 'people', value: p.zone === 'subura' ? 1.5 : 0.8, label: 'Seen canvassing' });
+      },
+      npc: (s, a) => {
+        if (a.id === s.playerId) return [];
+        const cand = candidacyOf(s, a.id);
+        const e = openElection(s);
+        const soon = !cand && !e && a.traits.ambition > 0.5 && !quaestorIneligible(s, a, yearBC(s) - 1) && dateOf(s.day).month >= 2;
+        if (!cand && !soon) return [];
+        const cash = cashOf(s, a.id);
+        const opts = [];
+        for (const zone of ['subura', 'campus'] as CanvassZone[]) {
+          const z = CANVASS_ZONES[zone];
+          if (cash < z.cost * 2) continue;
+          const gifts = cand && a.traits.greed > 0.6 && cash > 60000 ? 10000 : 0;
+          opts.push({ params: { zone, gifts }, utility: (cand ? 3.5 : 1.2) * a.traits.ambition + (zone === 'campus' ? 0.2 : 0) });
+        }
+        if (a.tribe === 'Cornelia' || a.tribe === 'Teretina') opts.push({ params: { zone: 'arpinum', gifts: 0 }, utility: cand ? 2 : 0.5 });
+        return opts;
+      },
+    });
+
+    registerAction({
+      id: 'serve',
+      label: 'Serve abroad as a military tribune',
+      blurb: 'A campaign season with the legions. Required before standing for office.',
+      place: 'campus',
+      duration: () => 200,
+      check: (s, a, p) => {
+        if (ageOf(s, a) < 17) return 'Too young to serve';
+        const camp = CAMPAIGNS.find((c) => c.id === p.campaign);
+        if (!camp) return 'Choose a campaign';
+        if (!campaignOpen(s, camp.id)) return 'That campaign is not under way';
+        return null;
+      },
+      odds: (_s, _a, p) => {
+        const camp = CAMPAIGNS.find((c) => c.id === p.campaign);
+        if (!camp) return null;
+        return { total: 1 - camp.risk, parts: [{ label: 'Return alive', value: 1 - camp.risk }] };
+      },
+      start: (s, a, _p) => {
+        emit(s, 'travel', { who: a.id, to: 'abroad', until: s.day + 200 });
+        if (a.id === s.playerId) emit(s, 'log', { text: 'You leave Rome to join the army.', kind: 'player' });
+      },
+      complete: (s, a, p) => {
+        const camp = CAMPAIGNS.find((c) => c.id === p.campaign)!;
+        if (chance(s.rng, camp.risk)) {
+          emit(s, 'death', { who: a.id, cause: `killed on campaign in ${camp.label}` });
+          return;
+        }
+        a.servedAbroad += 1;
+        record(s, a.id, 'military_tribune', yearBC(s));
+        emit(s, 'standing', { who: a.id, kind: 'dignitas', value: camp.dignitas, label: `Served in ${camp.label}`, halfLife: 0 });
+        const cmd = camp.commander ? byHistorical(s, camp.commander) : undefined;
+        if (cmd?.alive) emit(s, 'memory', { owner: cmd.id, about: a.id, act: `Served under me in ${camp.label}`, weight: 12, halfLife: 2000 });
+        if (a.id === s.playerId) {
+          emit(s, 'event.trigger', { eventId: 'returned_from_service', vars: { campaign: camp.label } });
+        }
+      },
+      npc: (s, a) => {
+        if (a.id === s.playerId) return [];
+        const age = ageOf(s, a);
+        if (age < 17 || age > 34 || a.servedAbroad >= 3 || a.rank === 'plebs') return [];
+        const open = CAMPAIGNS.filter((c) => campaignOpen(s, c.id));
+        if (!open.length || dateOf(s.day).month > 4) return [];
+        const camp = open[Math.floor(a.nextThink % open.length)];
+        return [{ params: { campaign: camp.id }, utility: a.servedAbroad === 0 && age >= 18 ? 4 : 1.2 * a.traits.boldness }];
+      },
+    });
+  },
+
+  init(s) {
+    const y = yearBC(s);
+    fillSeats(s, 'consul', y, 2, FASTI[y]?.consuls ?? []);
+    for (const key of FASTI[y]?.tribunes ?? []) {
+      const c = byHistorical(s, key);
+      if (c) record(s, c.id, 'tribune_pleb', y);
+    }
+    fillSeats(s, 'praetor', y, 6, FASTI[y]?.praetors ?? []);
+  },
+
+  yearly(s) {
+    const y = yearBC(s);
+    if (FASTI[y] || y >= 120) {
+      fillSeats(s, 'consul', y, 2, FASTI[y]?.consuls ?? []);
+      fillSeats(s, 'praetor', y, 6, FASTI[y]?.praetors ?? []);
+      for (const key of FASTI[y]?.tribunes ?? []) {
+        const c = byHistorical(s, key);
+        if (c?.alive && !c.flags.exiled && !s.offices.records.some((r) => r.who === c.id && r.yearBC === y && r.office !== 'military_tribune')) record(s, c.id, 'tribune_pleb', y);
+      }
+    }
+    for (const r of s.offices.records) {
+      if (r.yearBC === y && OFFICES[r.office].makesSenator) {
+        const c = s.chars[r.who];
+        if (c?.alive && c.rank !== 'senator') {
+          c.rank = 'senator';
+          if (c.id === s.playerId) emit(s, 'log', { text: 'You take office and your name is entered among the senators.', kind: 'player' });
+        }
+      }
+    }
+  },
+
+  monthly(s) {
+    const d = dateOf(s.day);
+    const y = d.yearBC;
+    if (d.month === 2) departGovernors(s, y);
+    if (d.month === QUAESTOR_ELECTION.openMonth && !openElection(s)) {
+      s.offices.elections.push(newElection(s));
+      emit(s, 'log', { text: `Candidates for the quaestorship of ${y - 1} BC may now give in their names.`, kind: 'election' });
+    }
+  },
+
+  daily(s) {
+    for (const g of s.offices.governors) {
+      if (!g.returned && s.day >= g.returnDay) {
+        g.returned = true;
+        const c = s.chars[g.who];
+        if (!c?.alive) continue;
+        if (c.location === 'abroad') c.location = 'rome';
+        emit(s, 'transfer', { from: null, to: g.who, amount: g.extorted, reason: 'provincial spoils' });
+        emit(s, 'governor.returned', { who: g.who, province: g.province, extorted: g.extorted });
+      }
+    }
+    const e = openElection(s);
+    if (!e) return;
+    if (s.day === e.professioDeadline) spawnOutsiders(s, e);
+    if (s.day >= e.day) {
+      const pc = e.candidates.find((c) => c.who === s.playerId);
+      if (pc && s.chars[s.playerId].alive && s.chars[s.playerId].location === 'rome') {
+        if (!s.flags[`vote_called_${e.id}_${e.postponements}`]) {
+          s.flags[`vote_called_${e.id}_${e.postponements}`] = 1;
+          emit(s, 'pause', { reason: 'election day' });
+        }
+      } else resolveElection(s, e);
+    }
+  },
+
+  blocks(s) {
+    const e = openElection(s);
+    if (e && s.day >= e.day && e.candidates.some((c) => c.who === s.playerId) && s.chars[s.playerId].location === 'rome') return 'election';
+    return null;
+  },
+};
+
+export function campaignOpen(s: GameState, id: string): boolean {
+  const c = CAMPAIGNS.find((x) => x.id === id);
+  if (!c) return false;
+  const y = yearBC(s);
+  if (y > c.years[0] || y < c.years[1]) return false;
+  if (!c.commander) return true;
+  const cmd = byHistorical(s, c.commander);
+  return !!cmd?.alive;
+}
+
+function departGovernors(s: GameState, y: number) {
+  // Seeded historical governorships first.
+  for (const h of HISTORICAL_GOVERNORS) {
+    if (h.departBC !== y) continue;
+    const c = byHistorical(s, h.who);
+    if (!c?.alive || c.location !== 'rome') continue;
+    const years = h.departBC - h.returnBC;
+    sendGovernor(s, c, h.province, years, h.greed);
+  }
+  const busy = new Set(s.offices.governors.filter((g) => !g.returned).map((g) => g.province));
+  const free = PROVINCES.filter((p) => p.fromBC >= y && !busy.has(p.id));
+  const pool = s.offices.records
+    .filter((r) => r.yearBC === y + 1 && (r.office === 'praetor' || r.office === 'consul'))
+    .map((r) => s.chars[r.who])
+    .filter((c) => c?.alive && c.location === 'rome' && c.id !== s.playerId && !s.offices.governors.some((g) => g.who === c.id && !g.returned));
+  for (const c of pool) {
+    if (!free.length) break;
+    const p = free.splice(Math.floor(rand(s.rng) * free.length), 1)[0];
+    sendGovernor(s, c, p.id, chance(s.rng, 0.35) ? 2 : 1, c.traits.greed);
+  }
+}
+
+function sendGovernor(s: GameState, c: Character, province: string, years: number, greed: number) {
+  const p = PROVINCES.find((x) => x.id === province)!;
+  const squeeze = Math.max(0, greed * greed * 900000 * p.richness * years * (0.7 + 0.6 * rand(s.rng)) - 120000);
+  const depart = s.day;
+  const ret = s.day + years * 365 - randInt(s.rng, 0, 40);
+  s.offices.governors.push({ who: c.id, province, departDay: depart, returnDay: ret, extorted: Math.round(squeeze / 1000) * 1000, returned: false });
+  emit(s, 'travel', { who: c.id, to: 'abroad', until: ret });
+  emit(s, 'log', { text: `${fullName(c)} sets out to govern ${p.label}.`, kind: 'world', about: [c.id] });
+}
