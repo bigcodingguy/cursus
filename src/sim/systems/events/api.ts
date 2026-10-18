@@ -1,9 +1,13 @@
 // Content event definitions and pure helpers for presenting them.
 
-import { EVENTS } from '../../../content/events';
+import { EVENTS as HISTORY } from '../../../content/events';
+import { OPPORTUNITIES } from '../../../content/opportunities';
+
+const EVENTS = [...HISTORY, ...OPPORTUNITIES];
 import { evalCond, evalNum, groupMembers, renderSegs, resolve, withRole, type Cond, type Effect, type Group, type NumExpr, type Ref, type Scope, type TextSeg } from '../../dsl';
 import type { Breakdown, CharId, GameState, PendingEvent } from '../../types';
 import { clamp } from '../../util';
+import { rand } from '../../rng';
 
 export interface RiskDef {
   chance: NumExpr;
@@ -23,7 +27,7 @@ export interface ChoiceDef {
   text?: TextSeg[] | string;
 }
 
-export type RoleDef = Ref | { pick: Group; best?: NumExpr; worst?: NumExpr };
+export type RoleDef = Ref | { pick: Group; best?: NumExpr; worst?: NumExpr; random?: boolean };
 
 export interface EventDef {
   id: string;
@@ -44,6 +48,8 @@ export interface EventDef {
   player?: boolean;
   immediate?: Effect[];
   choices?: ChoiceDef[];
+  /** 'opportunity': not checked daily; the pacer offers one when the player has been left alone a while. */
+  pool?: 'opportunity';
   /** Numbers computed when the event fires, available to text as {var:name}. */
   vars?: Record<string, NumExpr>;
 }
@@ -76,7 +82,7 @@ export function resolveRoles(s: GameState, def: EventDef, base: Record<string, C
       const members = groupMembers(s, r.pick, sc);
       if (!members.length) continue;
       const key = r.best ?? r.worst;
-      let chosen = members[0];
+      let chosen = r.random ? members[Math.floor(rand(s.rng) * members.length)] : members[0];
       if (key) {
         let bestV = -Infinity;
         for (const m of members) {

@@ -39,6 +39,9 @@ export const news: SystemDef = {
       if (s.news.items.length > 300) s.news.items.splice(0, s.news.items.length - 300);
     });
     on('gossip.hear', (s) => hear(s));
+    on('hook', (s, e) => {
+      if (e.name === 'hear_gossip') hear(s);
+    });
     on('action.done', (s, e) => {
       if (e.actor !== s.playerId) return;
       const a = getAction(e.action);

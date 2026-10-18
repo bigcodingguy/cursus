@@ -82,13 +82,13 @@ function buildReport(all: RunMetrics[], runs: number, secs: number): string {
     L.push(`| ${STRATEGIES[st].label} | ${pct(q.length, r.length)} | ${pct(r.filter((x) => x.highest === 'military_tribune').length, r.length)} | ${pct(r.filter((x) => x.highest === 'none').length, r.length)} | ${median(q.map((x) => x.quaestorAge!))} | ${(r.reduce((a, x) => a + x.electionsContested, 0) / r.length).toFixed(1)} | ${pct(first, r.filter((x) => x.electionsContested > 0).length)} |`);
   }
   L.push('', '## Risks', '');
-  L.push('| Strategy | Died | Exiled | Bankrupt | Father bankrupt | Debt at end (median) | Trials | Trials won |');
-  L.push('|---|---|---|---|---|---|---|---|');
+  L.push('| Strategy | Died | Exiled | Bankrupt | Father bankrupt | Father forced to sell land | Debt at end (median) | Trials | Trials won |');
+  L.push('|---|---|---|---|---|---|---|---|---|');
   for (const st of STRATS) {
     const r = all.filter((x) => x.strategy === st);
     const trials = r.reduce((a, x) => a + x.trials, 0);
     const won = r.reduce((a, x) => a + x.trialsWon, 0);
-    L.push(`| ${st} | ${pct(r.filter((x) => x.died).length, r.length)} | ${pct(r.filter((x) => x.exiled).length, r.length)} | ${pct(r.filter((x) => x.bankrupt).length, r.length)} | ${pct(r.filter((x) => x.fatherBankrupt).length, r.length)} | HS ${median(r.map((x) => x.debtEnd)).toLocaleString('en-US')} | ${(trials / r.length).toFixed(1)}/run | ${pct(won, trials)} |`);
+    L.push(`| ${st} | ${pct(r.filter((x) => x.died).length, r.length)} | ${pct(r.filter((x) => x.exiled).length, r.length)} | ${pct(r.filter((x) => x.bankrupt).length, r.length)} | ${pct(r.filter((x) => x.fatherBankrupt).length, r.length)} | ${pct(r.filter((x) => x.fatherSoldLand).length, r.length)} | HS ${median(r.map((x) => x.debtEnd)).toLocaleString('en-US')} | ${(trials / r.length).toFixed(1)}/run | ${pct(won, trials)} |`);
   }
   L.push('', '## Wealth (median cash in hand, Kalends of January)', '');
   const years = [133, 132, 131, 130, 129, 128, 127, 126, 125, 124, 123, 122, 121, 120];

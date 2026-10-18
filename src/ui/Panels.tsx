@@ -3,7 +3,10 @@ import { OFFICES, PROVINCES } from '../content/offices';
 import { dateOf } from '../sim/calendar';
 import { convictionChance, evidenceTerm, jurorLean, playerCase } from '../sim/systems/courts/api';
 import { cashOf, debtOf, loansHeldBy, loansOwedBy } from '../sim/systems/money/api';
-import { favorsOwed, memoriesAbout, opinion, tiesOf } from '../sim/systems/network/api';
+import { favorBalance, favorsOwed, memoriesAbout, opinion, tiesOf } from '../sim/systems/network/api';
+import { ASK_LABELS, askBlocked, type Ask } from '../sim/systems/city';
+import { ActionRow } from './PlacePanel';
+import { ambitions, recentlyRemembered, seenAs, whyMatters } from './people';
 import { clientsOf } from '../sim/systems/news';
 import { appealParts, candidacyOf, officesOf, openElection, profileOf, profiles, voteGap, voteOnce, winChance } from '../sim/systems/offices/api';
 import { standingOf } from '../sim/systems/standing/api';
@@ -28,11 +31,12 @@ export function PersonPanel({ s, id }: { s: GameState; id: string | null }) {
   const dig = standingOf(s, c.id, 'dignitas');
   const people = standingOf(s, c.id, 'people');
   const boni = standingOf(s, c.id, 'boni');
+  const why = me ? [] : whyMatters(s, c.id);
   return (
     <div>
       <div className="row" style={{ alignItems: 'flex-start' }}>
         <Portrait c={c} />
-        <div>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <h2 style={{ marginBottom: 0 }}>{fullName(c)}{!c.alive && ' †'}</h2>
           <div className="small muted">
             {c.female ? '' : `${ageOf(s, c)} years old · `}
@@ -40,8 +44,16 @@ export function PersonPanel({ s, id }: { s: GameState; id: string | null }) {
             {c.location !== 'rome' && c.alive ? ` · ${c.location === 'abroad' ? 'abroad' : c.location}` : ''}
           </div>
           {c.died && <div className="small bad">Died {shortDate(c.died.day)}: {c.died.cause}.</div>}
+          {why.length > 0 && (
+            <div className="row small" style={{ marginTop: 4, gap: '0.3rem' }}>
+              {why.slice(0, 5).map((r, i) => (
+                <span key={i} className={`chip ${r.tone === 'good' ? 'green' : r.tone === 'bad' ? 'red' : ''}`}>{r.text}</span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+      {me && <p><i>{seenAs(s)}</i></p>}
       {c.bio && <p>{c.bio}</p>}
       {!c.female && (
         <p className="small">
@@ -53,6 +65,7 @@ export function PersonPanel({ s, id }: { s: GameState; id: string | null }) {
         <span>· People <Why b={people}><b>{people.total}</b></Why></span>
         <span>· Boni <Why b={boni}><b>{boni.total}</b></Why></span>
       </div>
+      {!me && c.alive && <PersonActions s={s} id={c.id} />}
       {!me && c.alive && (
         <>
           <h3>What he thinks of you</h3>
@@ -87,11 +100,9 @@ export function PersonPanel({ s, id }: { s: GameState; id: string | null }) {
           {iOwe.map((f) => (
             <div key={f.id} className="small bad">You owe him: {f.reason} (weight {f.weight})</div>
           ))}
-          <div className="row" style={{ marginTop: 8 }}>
-            <button className="ghost" onClick={() => ui.setPlace(c.home)}>Go to his house</button>
-          </div>
         </>
       )}
+      {me && <YourselfDetails s={s} />}
       {offs.length > 0 && (
         <>
           <h4>Career</h4>
@@ -108,17 +119,117 @@ export function PersonPanel({ s, id }: { s: GameState; id: string | null }) {
         ))}
         {clientsOf(s, c.id).length > 0 && <div>Clients: {clientsOf(s, c.id).map((x) => <span key={x.id}><Name s={s} id={x.id} /> </span>)}</div>}
       </div>
-      {me && (
-        <>
-          <h3>Your purse</h3>
-          <div className="small">
-            Cash {fmtHS(cashOf(s, c.id))} · debts {fmtHS(debtOf(s, c.id))}
-            {c.flags.allowance ? ` · allowance from your father ${fmtHS(c.flags.allowance * 12)} a year` : ''}
-            {s.money.accounts[c.id]?.income ? ` · estates ${fmtHS(s.money.accounts[c.id].income)} a year` : ''} · household {fmtHS(s.money.accounts[c.id]?.upkeep ?? 0)} a year
-          </div>
-        </>
+      {!me && (
+        <div className="row" style={{ marginTop: 8 }}>
+          <button className="ghost" onClick={() => ui.setPlace(c.home)}>Show his district</button>
+        </div>
       )}
     </div>
+  );
+}
+
+/** Visit, ask, call in a favor, invite: the person is the interface. */
+function PersonActions({ s, id }: { s: GameState; id: string }) {
+  const ui = useUI();
+  const [ask, setAsk] = useState<Ask>('none');
+  const [amount, setAmount] = useState(10000);
+  const pl = s.chars[s.playerId];
+  const t = s.chars[id];
+  const asks = (Object.keys(ASK_LABELS) as Ask[]).filter((a) => !askBlocked(s, pl, t, a));
+  const cur = asks.includes(ask) ? ask : 'none';
+  const owed = favorBalance(s, id, s.playerId);
+  const invited = ui.guests.includes(id);
+  return (
+    <>
+      <h3>Act</h3>
+      <ActionRow s={s} id="visit" params={{ target: id, ask: cur, amount }} label={cur === 'none' ? `Call on ${shortName(t)}` : ASK_LABELS[cur]}>
+        <div className="row small" style={{ marginTop: 3 }}>
+          <select id={`ask-${id}`} value={cur} onChange={(e) => setAsk(e.target.value as Ask)}>
+            {asks.map((a) => (
+              <option key={a} value={a}>
+                {ASK_LABELS[a]}
+              </option>
+            ))}
+          </select>
+          {cur === 'loan' && (
+            <select value={amount} onChange={(e) => setAmount(Number(e.target.value))}>
+              {[5000, 10000, 20000, 50000].map((v) => (
+                <option key={v} value={v}>
+                  {fmtHS(v)}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        {owed > 0 && cur !== 'none' && <div className="small good">He owes you; asking now calls in the favor if he grants it.</div>}
+      </ActionRow>
+      {t.rank !== 'plebs' && (
+        <div className="row">
+          <button className="ghost" disabled={invited || ui.guests.length >= 3} onClick={() => ui.setGuests([...ui.guests, id])}>
+            {invited ? 'Invited to your next dinner' : 'Invite to your next dinner'}
+          </button>
+          {ui.guests.length > 0 && (
+            <a className="small" onClick={() => ui.setPlace(pl.home)}>
+              Your table: {ui.guests.map((g) => shortName(s.chars[g])).join(', ')} →
+            </a>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+function YourselfDetails({ s }: { s: GameState }) {
+  const me = s.chars[s.playerId];
+  const father = me.fatherId ? s.chars[me.fatherId] : undefined;
+  const mother = Object.values(s.chars).find((c) => c.female && c.familyId === me.familyId);
+  const amb = ambitions(s);
+  const recent = recentlyRemembered(s);
+  const acct = s.money.accounts[me.id];
+  return (
+    <>
+      <h3>Ambitions</h3>
+      <ul className="list small">
+        {amb.map((a, i) => (
+          <li key={i}>
+            <b>{a.title}.</b> {a.step}
+          </li>
+        ))}
+      </ul>
+      <h3>Family</h3>
+      <div className="small">
+        {father ? (
+          <div>
+            Father: <Name s={s} id={father.id} />, {father.alive ? `${ageOf(s, father)}, at Arpinum.` : `died ${shortDate(father.died!.day)}.`}
+            {father.alive && loansOwedBy(s, father.id).length > 0 && <span className="bad"> Owes {fmtHS(debtOf(s, father.id))}.</span>}
+            {father.flags.soldLand ? <span className="bad"> Was forced to sell land.</span> : null}
+          </div>
+        ) : null}
+        {mother && <div>Mother: {mother.nomen}, at Arpinum.</div>}
+        <div className="muted">Your father writes from time to time. Marriage and heirs come in the next phase.</div>
+      </div>
+      <h3>Lately, men remember</h3>
+      {recent.length ? (
+        <ul className="list small">
+          {recent.map((r, i) => (
+            <li key={i} className="spread">
+              <span>
+                <Name s={s} id={r.owner} />: “{r.act}” · {shortDate(r.day)}
+              </span>
+              <span className={r.value >= 0 ? 'good' : 'bad'}>{r.value > 0 ? '+' : ''}{r.value.toFixed(0)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="small muted">Nobody has had cause to remember you yet.</p>
+      )}
+      <h3>Your purse</h3>
+      <div className="small">
+        Cash {fmtHS(cashOf(s, me.id))} · debts {fmtHS(debtOf(s, me.id))}
+        {me.flags.allowance ? ` · allowance from your father ${fmtHS(me.flags.allowance * 12)} a year` : ''}
+        {acct?.income ? ` · estates ${fmtHS(acct.income)} a year` : ''} · household {fmtHS(acct?.upkeep ?? 0)} a year
+      </div>
+    </>
   );
 }
 

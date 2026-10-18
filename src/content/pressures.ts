@@ -29,12 +29,13 @@ export const PRESSURES: PressureDef[] = [
 export const STABILITY = {
   start: 68,
   drift: {
-    base: 0.15,
+    base: 0.25,
     label: 'Ordinary life resumes',
     mods: [
-      { label: 'Land hunger', when: { num: { pressure: 'land' }, gte: 70 }, add: -0.25 },
+      { label: 'Land hunger', when: { num: { pressure: 'land' }, gte: 75 }, add: -0.2 },
       { label: 'Allied anger', when: { num: { pressure: 'allies' }, gte: 70 }, add: -0.2 },
-      { label: 'Recovery from shock', when: { num: { stability: true }, lte: 40 }, add: 0.25 },
+      { label: 'Tempers cool after bloodshed', when: { num: { stability: true }, lte: 50 }, add: 0.55 },
+      { label: 'Old habits of concord', when: { num: { stability: true }, lte: 62 }, add: 0.2 },
     ],
   } as NumExpr,
 };

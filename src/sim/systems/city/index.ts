@@ -171,6 +171,76 @@ export function creditLimit(s: GameState, who: CharId): number {
 export const city: SystemDef = {
   id: 'city',
   register() {
+    // --- the young man's education: open from sixteen, before speeches, service or prosecutions ---
+    const youngUtility = (s: GameState, a: Character, base: number) => {
+      const age = ageOf(s, a);
+      return age >= 16 && age <= 24 && a.rank !== 'plebs' ? base + a.traits.ambition * 0.6 : 0;
+    };
+    const meetSomeone = (s: GameState, a: Character, filter: (c: Character) => boolean, act: string, weight: number) => {
+      const pool = menInRome(s).filter((c) => c.id !== a.id && filter(c));
+      if (!pool.length) return undefined;
+      const c = pool[Math.floor(rand(s.rng) * pool.length)];
+      emit(s, 'memory', { owner: c.id, about: a.id, act, weight, halfLife: 900 });
+      return c;
+    };
+
+    registerAction({
+      id: 'study',
+      label: 'Take lessons from a Greek rhetor',
+      blurb: 'Twenty days of declamation, gesture and memory with a master from Rhodes. Builds oratory; the young learn fastest.',
+      place: 'palatine',
+      duration: () => 20,
+      cost: () => 1500,
+      check: (s, a) => (ageOf(s, a) < 16 ? 'Too young' : a.oratory >= 60 ? 'There is little more a rhetor can teach you' : null),
+      complete: (s, a) => {
+        const young = ageOf(s, a) < 21 ? 1.3 : 1;
+        emit(s, 'skill', { who: a.id, skill: 'oratory', add: 3.5 * young });
+        emit(s, 'skill', { who: a.id, skill: 'law', add: 0.5 });
+        if (a.id === s.playerId) emit(s, 'log', { text: 'You finish a course of lessons with the rhetor.', kind: 'player' });
+      },
+      npc: (s, a) => (a.oratory < 55 && cashOf(s, a.id) > 10000 ? [{ params: {}, utility: youngUtility(s, a, 0.9) }] : []),
+    });
+
+    registerAction({
+      id: 'observe',
+      label: 'Watch the courts and the Senate doors',
+      blurb: 'Stand with the crowd at the tribunals and the open doors of the Curia. You learn the law, hear the talk, and are noticed.',
+      place: 'forum',
+      duration: () => 3,
+      check: (s, a) => (ageOf(s, a) < 16 ? 'Too young' : null),
+      complete: (s, a) => {
+        emit(s, 'skill', { who: a.id, skill: 'law', add: 1.5 });
+        emit(s, 'skill', { who: a.id, skill: 'oratory', add: 0.4 });
+        const c = meetSomeone(s, a, (x) => x.rank === 'senator', 'A young man who watches the courts', 4);
+        if (a.id === s.playerId) {
+          emit(s, 'gossip.hear', {});
+          emit(s, 'log', { text: c ? `You spend three days at the tribunals. ${shortName(c)} notices you and asks your name.` : 'You spend three days at the tribunals.', kind: 'player', about: c ? [c.id] : [] });
+        }
+      },
+      npc: (s, a) => [{ params: {}, utility: youngUtility(s, a, 0.8) }],
+    });
+
+    registerAction({
+      id: 'exercise',
+      label: 'Ride and swim with young men on the Campus',
+      blurb: 'Where the sons of the great houses exercise. Friendships made here last.',
+      place: 'campus',
+      duration: () => 2,
+      check: (s, a) => (ageOf(s, a) < 16 || ageOf(s, a) > 32 ? 'For young men' : null),
+      complete: (s, a) => {
+        const peers: Character[] = [];
+        for (let i = 0; i < 2; i++) {
+          const c = meetSomeone(s, a, (x) => x.rank !== 'plebs' && ageOf(s, x) <= 30 && !peers.includes(x), 'Rode with me on the Campus', 5);
+          if (c) {
+            peers.push(c);
+            emit(s, 'memory', { owner: a.id, about: c.id, act: 'Rode with me on the Campus', weight: 4, halfLife: 900 });
+          }
+        }
+        if (a.id === s.playerId && peers.length) emit(s, 'log', { text: `You ride on the Campus with ${peers.map(shortName).join(' and ')}.`, kind: 'player', about: peers.map((p) => p.id) });
+      },
+      npc: (s, a) => [{ params: {}, utility: youngUtility(s, a, 0.7) + a.traits.sociability * 0.4 }],
+    });
+
     registerAction({
       id: 'listen',
       label: 'Listen to the talk in the Forum',

@@ -29,6 +29,7 @@ export type NumExpr =
   | { standing: [Ref, StandingKind] }
   | { oratory: Ref }
   | { served: Ref }
+  | { law: Ref }
   | { cash: Ref }
   | { var: string }
   | { election: 'daysLeft' | 'postponements' | 'chance' | 'gap' }
@@ -62,7 +63,11 @@ export type Cond =
   | { candidate: Ref }
   | { inHouse: Ref; house: string }
   | { female: Ref }
-  | { someone: Group };
+  | { someone: Group }
+  /** Leads a case in preparation and has no co-counsel yet. */
+  | { leadsCase: Ref }
+  /** Has a close tie: patron, client, kin or friend. */
+  | { connected: [Ref, Ref] };
 
 export interface Group {
   select: 'senators' | 'adultMen' | 'all';
@@ -92,6 +97,10 @@ export type Effect =
   | { tie: { a: Ref; b: Ref; kind: 'amicus' | 'inimicus' | 'kin' } }
   | { postpone: { office: OfficeId; days: number; reason: string } }
   | { signal: string }
+  | { occupy: Ref; days: number }
+  | { lend: { lender: Ref; borrower: Ref; amount: NumExpr; months: number; monthlyRate?: number } }
+  /** Start an action for a character; string params of the form 'var:x' read event variables. */
+  | { act: string; who?: Ref; params?: Record<string, string | number> }
   | { callLoans: { lender: Ref; borrower: Ref } }
   | { forgiveCall: { lender: Ref; borrower: Ref } }
   | { give: { from: Ref; to: Ref; amount: number | 'all'; reason: string } }
@@ -171,6 +180,7 @@ export function evalNum(s: GameState, e: NumExpr, sc: Scope): Breakdown {
     return one(e.standing[1], c ? standingOf(s, c.id, e.standing[1]).total : 0);
   }
   if ('oratory' in e) return one('Oratory', resolve(s, e.oratory, sc)?.oratory ?? 0);
+  if ('law' in e) return one('Knowledge of the law', resolve(s, e.law, sc)?.law ?? 0);
   if ('served' in e) return one('Campaigns served', resolve(s, e.served, sc)?.servedAbroad ?? 0);
   if ('cash' in e) {
     const c = resolve(s, e.cash, sc);
@@ -249,6 +259,16 @@ export function evalCond(s: GameState, c: Cond, sc: Scope): boolean {
   if ('inHouse' in c) return resolve(s, c.inHouse, sc)?.familyId === c.house;
   if ('female' in c) return !!resolve(s, c.female, sc)?.female;
   if ('someone' in c) return groupMembers(s, c.someone, sc).length > 0;
+  if ('leadsCase' in c) {
+    const x = resolve(s, c.leadsCase, sc);
+    return !!x && s.courts.cases.some((k) => k.status === 'prep' && ((k.prosecutor === x.id && !k.prosecutionPrep.coCounsel) || (k.defender === x.id && k.defender !== k.defendant && !k.defensePrep.coCounsel)));
+  }
+  if ('connected' in c) {
+    const a = resolve(s, c.connected[0], sc);
+    const b = resolve(s, c.connected[1], sc);
+    if (!a || !b) return false;
+    return a.patronId === b.id || b.patronId === a.id || hasTie(s, a.id, b.id, 'amicus') || hasTie(s, a.id, b.id, 'kin') || (!!a.familyId && a.familyId === b.familyId);
+  }
   if ('patronOf' in c) {
     const a = resolve(s, c.patronOf[0], sc);
     const b = resolve(s, c.patronOf[1], sc);
@@ -356,6 +376,26 @@ function applyEffect(s: GameState, e: Effect, sc: Scope): void {
   }
   if ('postpone' in e) return emit(s, 'election.postpone', e.postpone);
   if ('signal' in e) return emit(s, 'hook', { name: e.signal, roles: sc.roles, vars: sc.vars });
+  if ('lend' in e) {
+    const l = idOf(s, e.lend.lender, sc);
+    const b = idOf(s, e.lend.borrower, sc);
+    const amount = Math.round(evalNum(s, e.lend.amount, sc).total);
+    if (l && b && amount > 0) emit(s, 'loan.make', { lender: l, borrower: b, amount, months: e.lend.months, monthlyRate: e.lend.monthlyRate });
+    return;
+  }
+  if ('occupy' in e) {
+    const who = idOf(s, e.occupy, sc);
+    if (who) emit(s, 'occupy', { who, days: e.days });
+    return;
+  }
+  if ('act' in e) {
+    const who = idOf(s, e.who ?? 'player', sc);
+    if (!who) return;
+    const params: Record<string, string | number> = {};
+    for (const [k, v] of Object.entries(e.params ?? {})) params[k] = typeof v === 'string' && v.startsWith('var:') ? sc.vars[v.slice(4)] ?? '' : v;
+    emit(s, 'act', { who, action: e.act, params });
+    return;
+  }
   if ('callLoans' in e || 'forgiveCall' in e) {
     const spec = 'callLoans' in e ? e.callLoans : e.forgiveCall;
     const l = idOf(s, spec.lender, sc);

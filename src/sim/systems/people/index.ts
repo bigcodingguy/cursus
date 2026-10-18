@@ -2,8 +2,12 @@
 
 import { emit, on } from '../../bus';
 import type { SystemDef } from '../../core';
-import { rand } from '../../rng';
+import { pick, rand } from '../../rng';
 import { ageOf, clamp, fullName } from '../../util';
+
+const YOUNG_CAUSES = ['a fever caught in the summer heat', 'a fall from his horse on the Campus', 'a wound that turned bad', 'drowning while swimming in the Tiber', 'a sudden fever'];
+const MIDDLE_CAUSES = ['a fever of the marshes', 'a wasting illness', 'a stroke at dinner', 'an illness of the lungs', 'a sickness of the bowels'];
+const OLD_CAUSES = ['old age', 'a long illness', 'a stroke', 'a failing heart', 'old age, in his sleep'];
 
 export const people: SystemDef = {
   id: 'people',
@@ -52,6 +56,10 @@ export const people: SystemDef = {
         c.busyUntil = Math.max(c.busyUntil, e.until);
       } else delete c.flags.returnDay;
     });
+    on('occupy', (s, e) => {
+      const c = s.chars[e.who];
+      if (c?.alive) c.busyUntil = Math.max(c.busyUntil, s.day + e.days);
+    });
     on('charFlag', (s, e) => {
       const c = s.chars[e.who];
       if (c) c.flags[e.key] = e.value;
@@ -96,9 +104,10 @@ export const people: SystemDef = {
       // Slice rule: no natural death for the player until heirs exist (Phase 3). See DECISIONS.md.
       if (c.id === s.playerId) continue;
       const age = ageOf(s, c);
-      const q = Math.min(0.5, 0.0015 * Math.exp(0.08 * Math.max(0, age - 16)));
+      // Gompertz: about 0.2% a year at 20, 0.7% at 35, 2.6% at 50, 7% at 62, 16% at 72.
+      const q = Math.min(0.5, 0.0035 * Math.exp(0.083 * Math.max(0, age - 26)));
       const monthly = 1 - Math.pow(1 - q, 1 / 12);
-      if (rand(s.rng) < monthly) emit(s, 'death', { who: c.id, cause: age > 55 ? 'old age and illness' : 'a fever' });
+      if (rand(s.rng) < monthly) emit(s, 'death', { who: c.id, cause: pick(s.rng, age >= 60 ? OLD_CAUSES : age >= 40 ? MIDDLE_CAUSES : YOUNG_CAUSES) });
     }
   },
 };

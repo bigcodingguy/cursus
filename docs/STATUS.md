@@ -1,6 +1,6 @@
 # Status
 
-_Updated 2026-10-18 — end of the Phase 1 + Phase 2 session._
+_Updated 2026-10-18 — slice polish pass (from Claude’s playtest; Blake has not played yet)._
 
 ## Where things stand
 
@@ -28,8 +28,19 @@ Acceptance moments verified (in bot runs and in my own UI playthrough):
 2. Prosecuting an ex-governor who is a friend of your father’s main creditor — 40–65% of orator/populist runs, median age 23; in my playthrough at 19 (Aquillius; the banker called my father’s loan and ruined him).
 4. A rival’s ally reports an omen, the election is postponed a week, “you are about N votes short” — in a majority of orator/populist runs.
 
+## Polish pass (2026-10-18)
+- **The world comes to you.** Ten kinds of opportunity arrive unasked after a quiet spell — roughly one every one to two months: a task or a canvass from your patron, junior counsel in someone else’s extortion case, a client in trouble, a dinner invitation, a banker’s cargo share or loan, a friend’s quarrel, a noble’s sneer, letters from your father, an old senator taking notice. Each is a real choice through existing systems (memories, favors, money, skills, courts).
+- **What now.** An always-visible panel: what you are doing, two or three ambitions with the next step and a link to the place, and the next key dates. A first-time note explains dignitas, the people and the boni (dismissable).
+- **People are the interface.** Any name opens a card with why he matters to you (patron, creditor, owes you a favor, juror in your case…), and buttons to call on him, ask, call in a favor, or invite him to dinner. Districts list the households that matter to you first. Dinner suggests a short list and has search.
+- **Ages 16–18.** Lessons with a Greek rhetor (Palatine), watching the courts and Senate doors (Forum), riding with young nobles (Campus), and a commander’s staff from 16.
+- **The legions** prompt is a real choice each spring until you have served: a named commander and war, a quieter garrison, or not this year.
+- **Stability** recovers after bloodshed: political murder after 133, riots by 131, debate by about 126, and down again 123–121.
+- **Balance**: the three bot paths now reach the quaestorship in similar shares; debts that land can cover end in a forced sale, not ruin.
+- **Person panel** for yourself: how Rome sees you, ambitions, family (father’s health, debts, letters), what men lately remember of you.
+- **Mortality** age-weighted with varied causes.
+
 ## How to verify
-- `npm test` — 13 tests: RNG, calendar, jury odds (exact vs brute force; sampled verdicts match shown odds), whole-lifetime invariants for each bot strategy, determinism, save/load mid-game continuity, monthly invariant checks.
+- `npm test` — 14 tests (including: a passive player is offered something at least five times a year): RNG, calendar, jury odds (exact vs brute force; sampled verdicts match shown odds), whole-lifetime invariants for each bot strategy, determinism, save/load mid-game continuity, monthly invariant checks.
 - `npm run bots -- --runs 1000 --write` — refreshes `docs/balance.md` (~35 min on 4 cores).
 - Playthrough: I played 133–129 BC through the UI in headless Chromium (patron choice, the veto and deposition votes, the Capitol, service in Spain/Sicily, contio speeches, a prosecution with the creditor’s threat, trial, borrowing, Scipio’s death) and fixed what broke.
 
@@ -41,7 +52,6 @@ Acceptance moments verified (in bot runs and in my own UI playthrough):
 - Placeholder art throughout (by design until Phase 4).
 - The slice ends at the close of 120 BC; there is no heir system yet, so the player cannot die of natural causes (a deliberate slice rule) and a violent death ends the run.
 - Ambitus (bribery) builds a record (`flags.ambitus`) but there is no bribery court yet; it only costs boni favor now.
-- The 16–18 years are thin: you can visit, dine, take clients, borrow, and live through the Gracchan crisis, but cannot speak (18), serve (17) or prosecute (19) yet.
 - Balance: the establishment strategy wins the quaestorship most reliably; the tribal assembly weights the 31 country tribes, where the boni’s favor counts. Orator bots who defy their father’s creditor often see the family ruined. See `docs/balance.md`.
 - The bot runner takes ~2.5 s per lifetime; 3×1000 runs take ~35 minutes on 4 cores.
 

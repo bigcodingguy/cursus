@@ -26,7 +26,7 @@ export const QUAESTOR_ELECTION = {
   dom: 25,
   openMonth: 5, // candidacies may be declared from the Kalends of Iunius
   professioDays: 24, // trinundinum: declare at least three market-weeks before
-  fieldMargin: [4, 7] as [number, number], // losers in a typical field
+  fieldMargin: [5, 8] as [number, number], // losers in a typical field
 };
 
 export const URBAN_TRIBES = ['Suburana', 'Esquilina', 'Collina', 'Palatina'];

@@ -197,6 +197,16 @@ function verdict(s: GameState, c: Case) {
     emit(s, 'log', { text: `${fullName(def)} is acquitted, ${acquit} votes to ${convict}.`, kind: 'court', about: [def.id, pros.id] });
   }
   for (const who of [pros, defender].filter(Boolean) as Character[]) emit(s, 'skill', { who: who.id, skill: 'oratory', add: 2.5 });
+  // Junior counsel share a little of the credit and learn a great deal.
+  for (const side of ['prosecution', 'defense'] as const) {
+    const co = (side === 'prosecution' ? c.prosecutionPrep : c.defensePrep).coCounsel;
+    if (!co || !s.chars[co]?.alive) continue;
+    const won = (side === 'prosecution') === (c.verdict === 'convicted');
+    emit(s, 'skill', { who: co, skill: 'oratory', add: 2 });
+    emit(s, 'skill', { who: co, skill: 'law', add: 2 });
+    if (won) emit(s, 'standing', { who: co, kind: 'dignitas', value: 2, label: `Junior counsel in the case of ${shortName(def)}`, halfLife: 0 });
+    emit(s, 'standing', { who: co, kind: 'people', value: won ? 3 : 1, label: 'Spoke in a famous case' });
+  }
   emit(s, 'news', { text: c.verdict === 'convicted' ? `${shortName(def)} has been convicted of extortion. ${shortName(pros)} is the man of the hour.` : `${shortName(def)} walked out of court acquitted.`, truth: 'true', delay: 0, about: [def.id, pros.id] });
   emit(s, 'trial.verdict', { caseId: c.id, verdict: c.verdict, prosecutor: pros.id, defender: c.defender, defendant: def.id });
   const side = sideOf(c, s.playerId);
@@ -255,6 +265,18 @@ export const courts: SystemDef = {
       for (const c of s.courts.cases) if (c.status === 'open' && c.defendant === e.who) c.status = 'closed';
     });
     on('hook', (s, e) => {
+      if (e.name === 'join_counsel') {
+        const lead = e.roles.lead;
+        const c = s.courts.cases.find((x) => x.status === 'prep' && (x.prosecutor === lead || x.defender === lead));
+        if (!c) return;
+        const prep = c.prosecutor === lead ? c.prosecutionPrep : c.defensePrep;
+        if (prep.coCounsel) return;
+        prep.coCounsel = s.playerId;
+        c.jury = c.jury.filter((j) => j.charId !== s.playerId);
+        emit(s, 'memory', { owner: lead, about: s.playerId, act: 'Joined me as junior counsel', weight: 10, halfLife: 2000 });
+        emit(s, 'memory', { owner: c.prosecutor === lead ? c.defendant : c.prosecutor!, about: s.playerId, act: 'Spoke against me in court', weight: -12, halfLife: 2000 });
+        return;
+      }
       if (e.name === 'drop_case') {
         const c = s.courts.cases.find((x) => x.defendant === e.roles.defendant && x.prosecutor === s.playerId && x.status === 'prep');
         if (!c) return;

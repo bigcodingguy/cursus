@@ -13,6 +13,9 @@ export interface UI {
   showPerson: (id: string) => void;
   tab: Tab;
   setTab: (t: Tab) => void;
+  /** Guests chosen for your next dinner, from anywhere in the UI. */
+  guests: string[];
+  setGuests: (g: string[]) => void;
 }
 export const UICtx = createContext<UI>(null as unknown as UI);
 export const useUI = () => useContext(UICtx);

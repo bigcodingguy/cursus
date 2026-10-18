@@ -10,6 +10,7 @@ import { consulsLine, dateLine, UICtx, Why, type Tab } from './common';
 import { EventModal, TrialModal, VoteModal } from './Modals';
 import { CasePanel, ChroniclePanel, ElectionPanel, FavorsPanel, GossipPanel, PeoplePanel, PersonPanel } from './Panels';
 import { PlacePanel } from './PlacePanel';
+import { WhatNow } from './WhatNow';
 import { exportSave, importSave, loadSlot, quit, saveSlot, setSpeed, slotInfo, SPEEDS, startNew, toast, useStore } from './store';
 import { plainDate } from '../sim/calendar';
 import { blockedBy } from '../sim/core';
@@ -206,7 +207,8 @@ function Game({ s, speed, version }: { s: GameState; speed: number; version: num
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [speed]);
-  const ui = { place, setPlace, person, showPerson: (id: string) => { setPerson(id); setTab('person'); }, tab, setTab };
+  const [guests, setGuests] = useState<string[]>([]);
+  const ui = { place, setPlace, person, showPerson: (id: string) => { setPerson(id); setTab('person'); }, tab, setTab, guests, setGuests };
   const heardNew = s.news.items.filter((g) => !g.heard && g.day <= s.day).length;
   const tabs: [Tab, string][] = [['person', 'Person'], ['people', 'People'], ['favors', 'Favors & debts'], ['gossip', `Gossip${heardNew ? ` (${heardNew} unheard)` : ''}`], ['chronicle', 'Calendar'], ['case', 'Case'], ['election', 'Election']];
   return (
@@ -224,6 +226,7 @@ function Game({ s, speed, version }: { s: GameState; speed: number; version: num
             </div>
           </div>
           <div className="right">
+            <WhatNow s={s} />
             <div className="tabs">
               {tabs.map(([t, label]) => (
                 <button key={t} className={`ghost ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>

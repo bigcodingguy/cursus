@@ -29,6 +29,21 @@ interface Strategy {
   gifts: number;
 }
 
+/** How every bot answers the opportunities the world brings: sensibly, not greedily. */
+const OPP_PREFS: Record<string, string[]> = {
+  opp_patron_task: ['Do it gladly'],
+  opp_patron_candidate: ['Canvass for'],
+  opp_junior_counsel: ['Accept'],
+  opp_client_trouble: ['Go before the praetor'],
+  opp_dinner_invitation: ['Accept'],
+  opp_banker: ['Neither'],
+  opp_peer_support: ['Stand with him'],
+  opp_slight: ['Let it pass'],
+  opp_father_letter: ['Write back'],
+  opp_elder_notice: ['Go, and listen'],
+  legions: ['Join'],
+};
+
 export const STRATEGIES: Record<StrategyId, Strategy> = {
   orator: {
     id: 'orator',
@@ -78,7 +93,7 @@ function handlePending(s: GameState, st: Strategy) {
       command(s, { type: 'dismiss', uid: p.uid });
       continue;
     }
-    const prefs = st.prefs[p.eventId] ?? [];
+    const prefs = st.prefs[p.eventId] ?? OPP_PREFS[p.eventId] ?? [];
     let pick = vis[0];
     for (const pref of prefs) {
       const m = vis.find((v) => v.label.includes(pref));
@@ -157,6 +172,12 @@ function decide(s: GameState, st: Strategy): void {
     if (open && open.evidence > 0.4 && act(s, 'prosecute', { caseId: open.id })) return;
   }
 
+  // The young man's education.
+  if (age < 19 && every(s, 'youth', 12)) {
+    const opts = ['study', 'observe', 'exercise'];
+    if (act(s, opts[Math.floor(s.day / 12) % 3])) return;
+  }
+
   // Speeches.
   if (age >= 18 && every(s, 'speak', st.speakEvery)) {
     const issues = availableIssues(s);
@@ -202,6 +223,7 @@ export interface RunMetrics {
   exiled: boolean;
   bankrupt: boolean;
   fatherBankrupt: boolean;
+  fatherSoldLand: boolean;
   cashByYear: Record<number, number>;
   debtEnd: number;
   stabilityByYear: Record<number, number>;
@@ -273,6 +295,7 @@ export function runLifetime(seed: number, strategyId: StrategyId, opts: { untilD
     exiled: !!me.flags.exiled,
     bankrupt: s.money.bankrupt.includes(me.id),
     fatherBankrupt: !!father && s.money.bankrupt.includes(father.id),
+    fatherSoldLand: !!father?.flags.soldLand,
     cashByYear,
     debtEnd: debtOf(s, me.id),
     stabilityByYear,

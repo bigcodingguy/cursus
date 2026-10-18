@@ -36,6 +36,8 @@ export interface BusEvents {
   bankrupt: { who: CharId };
   flag: { key: string; value: number };
   'gossip.hear': Record<string, never>;
+  occupy: { who: CharId; days: number };
+  act: { who: CharId; action: string; params: Record<string, string | number> };
   charFlag: { who: CharId; key: string; value: number };
   patron: { client: CharId; patron: CharId | null };
   /** A named moment content events can listen for (see EventDef.hook). */

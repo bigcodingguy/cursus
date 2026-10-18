@@ -13,3 +13,9 @@
 - 2026-10-18: Historical figures have tendencies, not scripts: events fire on conditions and daily hazards. If a key man is dead, a role may be filled by whoever fits (e.g. the hard-line consul of 121 BC).
 - 2026-10-18: Placeholder art: Pixi-drawn district shapes on a plain plan; portraits are colored tablets with initials (lean-colored). No illustration.
 - 2026-10-18: GitHub Pages deploy runs from `main` and the working branch via Actions (`deploy.yml`). Pages must be enabled in the repo settings with source "GitHub Actions".
+- 2026-10-18 (polish): Opportunities are ordinary content events with `pool: 'opportunity'`. They are not checked daily; the events system offers one, chosen at random among those whose conditions and roles fit, after the player has gone 24 quiet days (7% a day thereafter). Any player-facing event resets the clock. Save version 2 adds `events.lastPrompt`.
+- 2026-10-18 (polish): New DSL pieces: `occupy`, `act` (start an action from a choice), `lend`, conditions `leadsCase`, `connected`, numbers `law`, random role picks. Content still needs no engine changes for new opportunities.
+- 2026-10-18 (polish): Young men's actions (rhetor, watching the courts, the Campus) are open from 16; a commander's staff from 16 counts as service (half the risk, more of the commander's regard).
+- 2026-10-18 (polish): A debt that land can cover ends in a forced sale of land (income lost, a small hit to standing), not bankruptcy. Bankruptcy is for those whose land cannot cover it.
+- 2026-10-18 (polish): Election weights: the country tribes weigh the people's favor more (0.013) and the boni's less (0.012); the field of outside candidates is a little larger and stronger. All three bot paths now reach quaestor in roughly the same share of runs.
+- 2026-10-18 (polish): Mortality is Gompertz from age 26 (about 0.2%/yr at 20, 2.6% at 50, 7% at 62), with varied causes by age.

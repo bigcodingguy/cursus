@@ -3,7 +3,7 @@ import { CAMPAIGNS, CANVASS_ZONES, type CanvassZone } from '../content/offices';
 import { PLACES } from '../content/places';
 import { PROVINCES } from '../content/offices';
 import { checkAction, getAction } from '../sim/core';
-import { ASK_LABELS, askBlocked, availableIssues, bankers, creditLimit, type Ask } from '../sim/systems/city';
+import { availableIssues, bankers, creditLimit } from '../sim/systems/city';
 import { playerCase } from '../sim/systems/courts/api';
 import { cashOf, loansOwedBy } from '../sim/systems/money/api';
 import { opinion } from '../sim/systems/network/api';
@@ -12,11 +12,12 @@ import { candidacyOf, openElection } from '../sim/systems/offices/api';
 import { clientsOf } from '../sim/systems/news';
 import { standingOf } from '../sim/systems/standing/api';
 import type { ActionParams, GameState, PlaceId } from '../sim/types';
-import { ageOf, fmtHS, shortName } from '../sim/util';
+import { ageOf, fmtHS, fullName, shortName } from '../sim/util';
+import { relevance, whyMatters } from './people';
 import { Name, Odds, opinionWord, shortDate, useUI, Why } from './common';
 import { run } from './store';
 
-function ActionRow({ s, id, params, label, children }: { s: GameState; id: string; params: ActionParams; label?: string; children?: React.ReactNode }) {
+export function ActionRow({ s, id, params, label, children }: { s: GameState; id: string; params: ActionParams; label?: string; children?: React.ReactNode }) {
   const def = getAction(id)!;
   const pl = s.chars[s.playerId];
   const err = checkAction(s, s.playerId, id, params);
@@ -53,39 +54,52 @@ function ActionRow({ s, id, params, label, children }: { s: GameState; id: strin
   );
 }
 
-function VisitRow({ s, id }: { s: GameState; id: string }) {
-  const [ask, setAsk] = useState<Ask>('none');
-  const [amount, setAmount] = useState(10000);
-  const pl = s.chars[s.playerId];
-  const t = s.chars[id];
-  const op = opinion(s, id, s.playerId);
-  const asks = (Object.keys(ASK_LABELS) as Ask[]).filter((a) => !askBlocked(s, pl, t, a));
-  const params: ActionParams = { target: id, ask: asks.includes(ask) ? ask : 'none', amount };
+/** A household as a compact row: who he is to you, and a click opens his card. */
+function PersonRow({ s, id }: { s: GameState; id: string }) {
+  const ui = useUI();
+  const c = s.chars[id];
+  const why = whyMatters(s, id);
+  const op = opinion(s, id, s.playerId).total;
   return (
-    <ActionRow s={s} id="visit" params={params} label={`Call on ${shortName(t)}`}>
-      <div className="small">
-        <Name s={s} id={id} /> · {t.rank === 'senator' ? 'senator' : t.rank === 'eques' ? 'eques' : 'plebeian'} · thinks of you:{' '}
-        <Why b={op}>{opinionWord(op.total)}</Why>
-      </div>
-      <div className="row small" style={{ marginTop: 3 }}>
-        <select value={params.ask as string} onChange={(e) => setAsk(e.target.value as Ask)}>
-          {asks.map((a) => (
-            <option key={a} value={a}>
-              {ASK_LABELS[a]}
-            </option>
-          ))}
-        </select>
-        {params.ask === 'loan' && (
-          <select value={amount} onChange={(e) => setAmount(Number(e.target.value))}>
-            {[5000, 10000, 20000, 50000].map((v) => (
-              <option key={v} value={v}>
-                {fmtHS(v)}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-    </ActionRow>
+    <li className="spread">
+      <span>
+        <Name s={s} id={id} /> <span className="muted small">{c.rank === 'senator' ? 'senator' : c.rank === 'eques' ? 'eques' : 'plebeian'}</span>
+        {why.slice(0, 2).map((r, i) => (
+          <span key={i} className={`chip ${r.tone === 'good' ? 'green' : r.tone === 'bad' ? 'red' : ''}`} style={{ marginLeft: 4 }}>
+            {r.text}
+          </span>
+        ))}
+      </span>
+      <span className="small">
+        <span className={op >= 8 ? 'good' : op <= -8 ? 'bad' : 'muted'}>{opinionWord(op)}</span> · <a onClick={() => ui.showPerson(id)}>open</a>
+      </span>
+    </li>
+  );
+}
+
+function Households({ s, place }: { s: GameState; place: PlaceId }) {
+  const [all, setAll] = useState(false);
+  const residents = Object.values(s.chars)
+    .filter((c) => c.alive && c.home === place && c.location === 'rome' && c.id !== s.playerId && ageOf(s, c) >= 16 && !c.female)
+    .map((c) => ({ c, r: relevance(s, c.id) + standingOf(s, c.id, 'dignitas').total / 60 }))
+    .sort((a, b) => b.r - a.r);
+  if (!residents.length) return null;
+  const shown = all ? residents : residents.slice(0, 6);
+  return (
+    <>
+      <h3>Households here</h3>
+      <p className="small muted">Those who matter to you first. Click a name to call on him, ask a favor or invite him to dine.</p>
+      <ul className="list">
+        {shown.map(({ c }) => (
+          <PersonRow key={c.id} s={s} id={c.id} />
+        ))}
+      </ul>
+      {residents.length > shown.length && (
+        <a className="small" onClick={() => setAll(true)}>
+          Show all {residents.length}
+        </a>
+      )}
+    </>
   );
 }
 
@@ -104,6 +118,7 @@ function Forum({ s }: { s: GameState }) {
   return (
     <>
       <ActionRow s={s} id="listen" params={{}} />
+      <ActionRow s={s} id="observe" params={{}} />
       {cur && (
         <ActionRow s={s} id="speak" params={{ issue: cur.id, stance }}>
           <div className="row small" style={{ marginTop: 3 }}>
@@ -219,6 +234,7 @@ function Campus({ s }: { s: GameState }) {
         </div>
       )}
       <ActionRow s={s} id="declare" params={{}} />
+      <ActionRow s={s} id="exercise" params={{}} />
       <ActionRow s={s} id="canvass" params={{ zone, gifts }} label={CANVASS_ZONES[zone].label}>
         <div className="row small" style={{ marginTop: 3 }}>
           <select value={zone} onChange={(e) => setZone(e.target.value as CanvassZone)}>
@@ -268,12 +284,60 @@ function Subura({ s }: { s: GameState }) {
   );
 }
 
+function DinnerPicker({ s }: { s: GameState }) {
+  const ui = useUI();
+  const [q, setQ] = useState('');
+  const me = s.chars[s.playerId];
+  const candidates = Object.values(s.chars).filter((c) => c.alive && c.location === 'rome' && c.id !== me.id && !c.female && ageOf(s, c) >= 16 && c.rank !== 'plebs' && !ui.guests.includes(c.id));
+  const suggested = candidates
+    .map((c) => ({ c, r: relevance(s, c.id) + standingOf(s, c.id, 'dignitas').total / 40 }))
+    .sort((a, b) => b.r - a.r)
+    .slice(0, 6)
+    .map((x) => x.c);
+  const found = q.length >= 2 ? candidates.filter((c) => fullName(c).toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
+  const add = (id: string) => ui.guests.length < 3 && ui.setGuests([...ui.guests, id]);
+  const row = (id: string) => {
+    const why = whyMatters(s, id)[0];
+    return (
+      <li key={id} className="spread">
+        <span>
+          <Name s={s} id={id} /> {why && <span className="chip">{why.text}</span>}
+        </span>
+        <a className="small" onClick={() => add(id)}>
+          invite
+        </a>
+      </li>
+    );
+  };
+  return (
+    <div className="small" style={{ marginTop: 4 }}>
+      <div>
+        At your table:{' '}
+        {ui.guests.length ? (
+          ui.guests.map((g) => (
+            <span key={g} className="chip">
+              {shortName(s.chars[g])} <a onClick={() => ui.setGuests(ui.guests.filter((x) => x !== g))}>×</a>
+            </span>
+          ))
+        ) : (
+          <span className="muted">nobody yet (up to three)</span>
+        )}
+      </div>
+      {ui.guests.length < 3 && (
+        <>
+          <div className="muted" style={{ marginTop: 4 }}>Suggested: your patron’s circle, friends, and useful men</div>
+          <ul className="list">{suggested.map((c) => row(c.id))}</ul>
+          <input id="dinner-search" placeholder="Find someone else…" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginTop: 4 }} />
+          {found.length > 0 && <ul className="list">{found.map((c) => row(c.id))}</ul>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function Home({ s }: { s: GameState }) {
-  const [guests, setGuests] = useState<string[]>([]);
+  const ui = useUI();
   const [style, setStyle] = useState('modest');
-  const known = Object.values(s.chars)
-    .filter((c) => c.alive && c.location === 'rome' && c.id !== s.playerId && !c.female && ageOf(s, c) >= 16)
-    .sort((a, b) => standingOf(s, b.id, 'dignitas').total - standingOf(s, a.id, 'dignitas').total);
   const pl = s.chars[s.playerId];
   const clients = clientsOf(s, pl.id);
   return (
@@ -293,32 +357,15 @@ function Home({ s }: { s: GameState }) {
           {s.routine === 'receive' && (clients.length ? <>{clients.length} client{clients.length > 1 ? 's' : ''} at your door each morning. They bring you the city’s talk.</> : <span className="bad">You have no clients yet. Offer your protection to plebeians in the Subura or the Aventine.</span>)}
         </div>
       </div>
-      <ActionRow s={s} id="dinner" params={{ guests, style }}>
+      <ActionRow s={s} id="dinner" params={{ guests: ui.guests, style }}>
         <div className="row small" style={{ marginTop: 3 }}>
-          <select value="" onChange={(e) => e.target.value && guests.length < 3 && !guests.includes(e.target.value) && setGuests([...guests, e.target.value])}>
-            <option value="">Invite a guest…</option>
-            {known.map((c) => (
-              <option key={c.id} value={c.id}>
-                {shortName(c)} ({opinionWord(opinion(s, c.id, s.playerId).total)})
-              </option>
-            ))}
-          </select>
-          <select value={style} onChange={(e) => setStyle(e.target.value)}>
+          <select id="dinner-style" value={style} onChange={(e) => setStyle(e.target.value)}>
             <option value="modest">A modest table</option>
             <option value="fine">A fine dinner</option>
             <option value="lavish">A lavish feast</option>
           </select>
         </div>
-        {guests.length > 0 && (
-          <div className="small">
-            Guests:{' '}
-            {guests.map((g) => (
-              <span key={g} className="chip">
-                {shortName(s.chars[g])} <a onClick={() => setGuests(guests.filter((x) => x !== g))}>×</a>
-              </span>
-            ))}
-          </div>
-        )}
+        <DinnerPicker s={s} />
       </ActionRow>
     </>
   );
@@ -327,9 +374,6 @@ function Home({ s }: { s: GameState }) {
 export function PlacePanel({ s, place }: { s: GameState; place: PlaceId }) {
   const def = PLACES.find((p) => p.id === place)!;
   const pl = s.chars[s.playerId];
-  const residents = Object.values(s.chars)
-    .filter((c) => c.alive && c.home === place && c.location === 'rome' && c.id !== s.playerId && ageOf(s, c) >= 16 && !c.female)
-    .sort((a, b) => standingOf(s, b.id, 'dignitas').total - standingOf(s, a.id, 'dignitas').total);
   const busy = pl.action ? getAction(pl.action.id) : undefined;
   return (
     <div>
@@ -351,10 +395,8 @@ export function PlacePanel({ s, place }: { s: GameState; place: PlaceId }) {
       {place === 'campus' && <Campus s={s} />}
       {place === 'subura' && <Subura s={s} />}
       {place === pl.home && <Home s={s} />}
-      {residents.length > 0 && <h3>Households here</h3>}
-      {residents.map((c) => (
-        <VisitRow key={c.id} s={s} id={c.id} />
-      ))}
+      {place === 'palatine' && <ActionRow s={s} id="study" params={{}} />}
+      <Households s={s} place={place} />
       {place === 'capitol' && <p className="small muted">The assemblies meet here for the tribunes’ elections and on high occasions. Nobody lives on the Capitol but the gods.</p>}
     </div>
   );

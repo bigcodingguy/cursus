@@ -155,13 +155,25 @@ function settle(s: GameState, loanId: number) {
   // The rest comes out of his land, sold at auction at a forced-sale price.
   const short = l.principal - cash;
   const acct = s.money.accounts[l.borrower];
+  let covered = false;
   if (acct && acct.income > 0 && short > 0) {
     const landValue = (acct.income / 0.06) * 0.7;
     const sold = Math.min(1, short / landValue);
+    covered = landValue >= short;
     emit(s, 'transfer', { from: null, to: l.lender, amount: Math.min(short, landValue), reason: 'estates sold at auction' });
     acct.income = Math.round(acct.income * (1 - sold));
   }
   s.money.loans = s.money.loans.filter((x) => x.id !== loanId);
+  if (covered) {
+    // A forced sale of land: a heavy loss and a humiliation, but not ruin.
+    emit(s, 'charFlag', { who: l.borrower, key: 'soldLand', value: s.day });
+    emit(s, 'standing', { who: l.borrower, kind: 'dignitas', value: -4, label: 'Forced to sell land to pay a debt', halfLife: 3000 });
+    emit(s, 'standing', { who: l.borrower, kind: 'boni', value: -6, label: 'Forced to sell land to pay a debt' });
+    emit(s, 'memory', { owner: l.borrower, about: l.lender, act: 'Forced me to sell my land', weight: -30, halfLife: 3650 });
+    emit(s, 'log', { text: `${name(s, l.borrower)} cannot find the cash to pay ${name(s, l.lender)}, and sells land at auction to clear the debt.`, kind: 'money', about: [l.borrower, l.lender] });
+    emit(s, 'news', { text: `${name(s, l.borrower)} has had to sell land at a bad price to pay his creditor.`, about: [l.borrower] });
+    return;
+  }
   emit(s, 'bankrupt', { who: l.borrower });
   emit(s, 'standing', { who: l.borrower, kind: 'dignitas', value: -15, label: 'Defaulted on a debt', halfLife: 0 });
   emit(s, 'standing', { who: l.borrower, kind: 'boni', value: -20, label: 'Defaulted on a debt' });

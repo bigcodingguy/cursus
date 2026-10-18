@@ -1,5 +1,6 @@
 // NPC minds: every few days each free NPC scores the same actions the player has and picks one.
 
+import { on } from '../../bus';
 import { allActions, checkAction, startAction, type SystemDef } from '../../core';
 import { gauss, randInt } from '../../rng';
 import type { ActionParams } from '../../types';
@@ -7,6 +8,12 @@ import { ageOf } from '../../util';
 
 export const agents: SystemDef = {
   id: 'agents',
+  register() {
+    // Content may start an action for someone (e.g. enlisting from an event).
+    on('act', (s, e) => {
+      startAction(s, e.who, e.action, e.params);
+    });
+  },
   daily(s) {
     const acts = allActions().filter((a) => a.npc);
     for (const c of Object.values(s.chars)) {

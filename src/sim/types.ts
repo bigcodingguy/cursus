@@ -260,6 +260,8 @@ export interface EventsState {
   pending: PendingEvent[];
   nextUid: number;
   scheduled: { day: number; eventId: string; roles: Record<string, CharId>; vars?: Record<string, string | number> }[];
+  /** Day the player last faced an event; opportunities are paced from it. */
+  lastPrompt: number;
 }
 
 // ---------------- news ----------------

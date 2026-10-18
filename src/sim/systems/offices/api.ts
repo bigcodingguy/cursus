@@ -83,8 +83,8 @@ export function appealParts(p: Profile, tribe: string): { label: string; value: 
   const urban = URBAN_TRIBES.includes(tribe);
   const parts = [
     { label: 'Dignitas and name', value: 0.035 * p.dig },
-    { label: 'Favor of the people', value: (urban ? 0.022 : 0.01) * p.people },
-    { label: 'Favor of the boni', value: (urban ? 0.005 : 0.016) * p.boni },
+    { label: 'Favor of the people', value: (urban ? 0.022 : 0.013) * p.people },
+    { label: 'Favor of the boni', value: (urban ? 0.005 : 0.012) * p.boni },
   ];
   if (p.tribe === tribe) parts.push({ label: 'His own tribe', value: 1.0 });
   const effort = p.canvass[tribe] ?? 0;

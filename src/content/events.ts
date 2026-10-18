@@ -73,14 +73,18 @@ export const EVENTS: EventDef[] = [
     ],
   },
   {
-    id: 'service_reminder',
-    title: 'The legions',
+    id: 'legions',
+    title: 'The legions are marching',
     player: true,
-    when: { all: [inRome, { num: { age: 'player' }, gte: 17 }, { num: { served: 'player' }, lte: 0 }, { after: [132, 1, 15] }] },
-    hazard: 0.03,
-    cooldown: 365,
-    text: 'No man stands for office who has not served. The armies leave each spring; a young man of good family goes as a military tribune, if a commander will have him. You can enlist from the Campus Martius.',
-    choices: [{ label: 'Noted' }],
+    text: [
+      'It is the season when the armies leave. {commander} is raising officers for {var:campaign}, and a friend of your family says a word could be put in for you.',
+      'No man stands for office who has not served. Glory comes from a real war; a garrison in Spain is quieter and still counts.',
+    ],
+    choices: [
+      { label: 'Join {commander} for {var:campaign} ({var:risk}% risk of death)', effects: [{ act: 'serve', params: { campaign: 'var:campaignId', staff: 'var:staff' } }], text: 'You buy a horse and a good cloak, and leave with the army at the Kalends. {commander} will know your face by the end of the season.' },
+      { label: 'Ask for garrison duty in Spain instead ({var:spainRisk}% risk of death)', effects: [{ act: 'serve', params: { campaign: 'spain', staff: 'var:staff' } }], text: 'Spain it is: dull marches, hill forts, and a commander who barely notices you. It counts all the same.' },
+      { label: 'Not this year', text: 'You stay in Rome. There will be another army next spring.' },
+    ],
   },
 
   // ---------------------------------------------------------------- 133: Tiberius
@@ -150,7 +154,7 @@ export const EVENTS: EventDef[] = [
     id: 'capitol',
     title: 'On the Capitol',
     when: { all: [{ flag: 'ti_reelection' }, { after: [133, 6, 1] }, { before: [133, 7, 16] }, { alive: '@ti_gracchus' }, inRome, { noFlag: 'capitol_done' }] },
-    hazard: 0.06,
+    hazard: 0.09,
     player: true,
     roles: { patron: 'player.patron' },
     text: [
@@ -197,7 +201,7 @@ export const EVENTS: EventDef[] = [
     id: 'capitol_away',
     title: 'News from Rome',
     when: { all: [{ flag: 'ti_reelection' }, { after: [133, 6, 1] }, { before: [133, 7, 16] }, { alive: '@ti_gracchus' }, away, { noFlag: 'capitol_done' }] },
-    hazard: 0.06,
+    hazard: 0.09,
     text: 'Senators led by Nasica killed Tiberius Gracchus on the Capitol.',
     immediate: [{ flag: 'capitol_done' }, ...KILL_TIBERIUS],
   },
@@ -345,7 +349,7 @@ export const EVENTS: EventDef[] = [
       'Gaius Gracchus is tribune, and he speaks as no one has spoken in the Forum — pacing, shouting, turning his back on the Senate house to address the people. A slave behind him sounds a pitch-pipe when his voice climbs too high.',
       'His first laws: grain for every citizen at a fixed low price, and the taxes of Asia sold at Rome to the equestrian companies. Every interest in Rome now has something to gain from him, or to lose.',
     ],
-    immediate: [{ flag: 'gaius_laws' }, { flag: 'land_commission' }, { standing: { who: '@c_gracchus', kind: 'people', value: 20, label: 'The grain law' } }, { stability: -3, label: 'Gaius Gracchus’s laws' }, { pressure: 'land', add: -4 }],
+    immediate: [{ flag: 'gaius_laws' }, { flag: 'land_commission' }, { standing: { who: '@c_gracchus', kind: 'people', value: 20, label: 'The grain law' } }, { stability: -6, label: 'Gaius Gracchus’s laws' }, { pressure: 'land', add: -4 }],
     choices: [
       { label: 'Throw yourself into his cause', effects: [{ memory: { owner: '@c_gracchus', about: 'player', act: 'Worked for my laws', weight: 15 } }, { standing: { who: 'player', kind: 'people', value: 5, label: 'A Gracchan' } }, { standing: { who: 'player', kind: 'boni', value: -5, label: 'A Gracchan' } }, { lean: 'player', add: -0.1 }] },
       { label: 'Join those who mean to stop him', effects: [{ memory: { owner: '@c_gracchus', about: 'player', act: 'Worked against my laws', weight: -12 } }, { memory: { owner: '@opimius', about: 'player', act: 'Stood against Gracchus', weight: 8 } }, { standing: { who: 'player', kind: 'boni', value: 5, label: 'Against Gracchus' } }, { standing: { who: 'player', kind: 'people', value: -4, label: 'Against Gracchus' } }, { lean: 'player', add: 0.1 }] },
@@ -362,7 +366,7 @@ export const EVENTS: EventDef[] = [
       'Gaius has carried his law on the courts. From now on the juries of the extortion court will be drawn from the equites, not the Senate — men of business judging the senators who govern the provinces where they do business. Convicted governors will repay double.',
       'Whoever you mean to prosecute or defend, it is equestrian bankers and contractors you must now persuade.',
     ],
-    immediate: [{ flag: 'jury_law' }, { law: 'repetundaeJury', value: 'equites' }, { law: 'repetundaeMultiplier', value: 2 },
+    immediate: [{ flag: 'jury_law' }, { stability: -5, label: 'The courts handed to the equites' }, { law: 'repetundaeJury', value: 'equites' }, { law: 'repetundaeMultiplier', value: 2 },
       { memory: { owner: { select: 'senators', where: { num: { lean: 'it' }, gte: 0.3 } }, about: '@c_gracchus', act: 'Handed the courts to the equites', weight: -15, halfLife: 3000 } },
       { log: 'The extortion court’s juries pass from senators to equites. Restitution is now doubled.' }],
     choices: [{ label: 'Understood' }],
@@ -373,7 +377,7 @@ export const EVENTS: EventDef[] = [
     when: { all: [{ holds: '@c_gracchus', office: 'tribune_pleb' }, { year: [122, 122] }, { after: [122, 1, 1] }] },
     hazard: 0.03,
     text: 'Gaius has gone to Africa to found a colony, Junonia, on the cursed ground of Carthage. In his absence the tribune Livius Drusus, backed by the Senate, outbids him: twelve colonies instead of two, and no rent on the new allotments.',
-    immediate: [{ flag: 'junonia' }, { travel: '@c_gracchus', to: 'abroad', days: 70 }, { standing: { who: '@c_gracchus', kind: 'people', value: -10, label: 'Outbid by Drusus' } }, { standing: { who: '@drusus', kind: 'people', value: 10, label: 'Out-promised Gracchus' } }, { news: 'Wolves dug up the boundary stones at Junonia, they say. The augurs are saying the gods do not want a colony on Carthage.', truth: 'unconfirmed', delay: 4 }],
+    immediate: [{ flag: 'junonia' }, { stability: -5, label: 'Gracchus outbid; tempers rise' }, { travel: '@c_gracchus', to: 'abroad', days: 70 }, { standing: { who: '@c_gracchus', kind: 'people', value: -10, label: 'Outbid by Drusus' } }, { standing: { who: '@drusus', kind: 'people', value: 10, label: 'Out-promised Gracchus' } }, { news: 'Wolves dug up the boundary stones at Junonia, they say. The augurs are saying the gods do not want a colony on Carthage.', truth: 'unconfirmed', delay: 4 }],
   },
   {
     id: 'antyllius',
@@ -470,7 +474,7 @@ export const EVENTS: EventDef[] = [
         label: 'Press on with the prosecution',
         effects: [{ memory: { owner: '@aufidius', about: 'player', act: 'Ignored my warning', weight: -15, halfLife: 2000 } }],
         risk: {
-          chance: { base: 0.45, label: 'He may be bluffing', mods: [{ label: 'His regard for you', add: { mul: [{ opinion: ['@aufidius', 'player'] }, 0.006] } }] , min: 0.05, max: 0.95 },
+          chance: { base: 0.55, label: 'He may be bluffing', mods: [{ label: 'His regard for you', add: { mul: [{ opinion: ['@aufidius', 'player'] }, 0.006] } }], min: 0.05, max: 0.95 },
           success: [],
           failure: [{ callLoans: { lender: '@aufidius', borrower: 'player.father' } }, { trigger: 'father_loan_called', delay: 6 }],
           successText: 'You tell him you will see him in court. He laughs, and pats your arm, and lets it go. It seems he was bluffing.',
@@ -517,7 +521,18 @@ export const EVENTS: EventDef[] = [
     choices: [
       { label: 'Send him everything you have', effects: [{ give: { from: 'player', to: 'father', amount: 'all', reason: 'help for your father' } }, { memory: { owner: 'father', about: 'player', act: 'Sent me all he had', weight: 20 } }], text: 'You send what you have. It may not be enough. Look to the bankers, or to your friends.' },
       { label: 'Go to {creditor} and drop the case after all', effects: [{ signal: 'drop_case' }, { forgiveCall: { lender: '@aufidius', borrower: 'player.father' } }], text: '{creditor} is gracious. The loan is extended. The whole Forum knows why.' },
-      { label: 'Tell him to hold on; you will find a way', text: 'You have thirty days. A banker might lend you enough to send to Arpinum.' },
+      {
+        label: 'Ask T. Pinarius to lend your father the money',
+        when: { alive: '@pinarius' },
+        risk: {
+          chance: { base: 0.45, label: 'A banker weighing a rival’s client', mods: [{ label: 'His regard for you', add: { mul: [{ opinion: ['@pinarius', 'player'] }, 0.008] } }, { label: 'Your father’s land is good security', add: 0.15 }], min: 0.05, max: 0.95 },
+          success: [{ lend: { lender: '@pinarius', borrower: 'father', amount: { var: 'debt' }, months: 24, monthlyRate: 0.011 } }, { favor: { debtor: 'player', creditor: '@pinarius', weight: 2, reason: 'Saved my father from Aufidius' } }],
+          failure: [],
+          successText: 'Pinarius looks at the map of your father’s olive groves for a long time, and lends. Your father pays Aufidius off; now he owes Pinarius, at a little more. And so do you.',
+          failureText: 'Pinarius will not cross Aufidius for a boy from Arpinum. You have thirty days.',
+        },
+      },
+      { label: 'Tell him to hold on; you will find a way', text: 'You have thirty days. A banker might lend you enough to send to Arpinum. If not, he will have to sell land.' },
     ],
   },
   {

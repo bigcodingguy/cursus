@@ -18,6 +18,7 @@ function fire(s: GameState, def: EventDef, baseRoles: Record<string, CharId>, va
   if (def.player) {
     if (s.ended) return true;
     s.events.pending.push({ uid: s.events.nextUid++, eventId: def.id, day: s.day, roles, vars });
+    s.events.lastPrompt = s.day;
     emit(s, 'pause', { reason: def.title });
   }
   return true;
@@ -27,6 +28,26 @@ function eligible(s: GameState, def: EventDef): boolean {
   const last = s.events.fired[def.id];
   if (last !== undefined && (def.cooldown === undefined || s.day - last < def.cooldown)) return false;
   return true;
+}
+
+/** The world comes to the player: after a quiet spell, one opportunity from the pool, if any fits. */
+const QUIET_DAYS = 24;
+const PACE_HAZARD = 0.07;
+function pace(s: GameState) {
+  const pl = s.chars[s.playerId];
+  if (s.events.pending.length || !pl.alive || pl.location !== 'rome' || s.ended) return;
+  if (s.day - s.events.lastPrompt < QUIET_DAYS || rand(s.rng) >= PACE_HAZARD) return;
+  const options: { def: EventDef; roles: Record<string, CharId> }[] = [];
+  for (const def of allEvents()) {
+    if (def.pool !== 'opportunity' || !eligible(s, def)) continue;
+    const simple = resolveRoles(s, def, {}, true)!;
+    if (def.when && !evalCond(s, def.when, { roles: simple, vars: {} })) continue;
+    const roles = resolveRoles(s, def, simple);
+    if (roles) options.push({ def, roles });
+  }
+  if (!options.length) return;
+  const o = options[Math.floor(rand(s.rng) * options.length)];
+  fire(s, o.def, o.roles, {});
 }
 
 export const events: SystemDef = {
@@ -90,8 +111,9 @@ export const events: SystemDef = {
         if (def) fire(s, def, d.roles, d.vars ?? {});
       }
     }
+    pace(s);
     for (const def of allEvents()) {
-      if (!def.when || def.hook || !eligible(s, def)) continue;
+      if (!def.when || def.hook || def.pool || !eligible(s, def)) continue;
       // `when` may use only simple roles; group-picked roles are resolved when the event fires.
       const simple = resolveRoles(s, def, {}, true)!;
       if (!evalCond(s, def.when, { roles: simple, vars: {} })) continue;

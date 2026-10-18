@@ -1,11 +1,18 @@
 // Save-format migrations. Bump CURRENT_VERSION and add a step whenever the state shape changes.
 
-export const CURRENT_VERSION = 1;
+export const CURRENT_VERSION = 2;
 
 type Migration = (state: Record<string, unknown>) => Record<string, unknown>;
 
 /** migrations[n] upgrades a version-n state to version n+1. */
-export const migrations: Record<number, Migration> = {};
+export const migrations: Record<number, Migration> = {
+  // v2: opportunities are paced from the last time the player faced an event.
+  1: (s) => {
+    const ev = s.events as Record<string, unknown>;
+    ev.lastPrompt = s.day;
+    return s;
+  },
+};
 
 export function migrate(state: Record<string, unknown>, from: number): Record<string, unknown> {
   let v = from;

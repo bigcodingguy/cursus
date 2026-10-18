@@ -105,7 +105,7 @@ function spawnOutsiders(s: GameState, e: Election) {
     s.chars[id] = c;
     s.money.accounts[id] = { cash: 0, income: 30000 + 40000 * rand(s.rng), upkeep: 30000 };
     emit(s, 'transfer', { from: null, to: id, amount: 20000 + Math.round(60000 * rand(s.rng)), reason: 'estates' });
-    emit(s, 'standing', { who: id, kind: 'dignitas', value: Math.round(6 + 10 * rand(s.rng)), label: 'Military service', halfLife: 0 });
+    emit(s, 'standing', { who: id, kind: 'dignitas', value: Math.round(8 + 12 * rand(s.rng)), label: 'Military service', halfLife: 0 });
     emit(s, 'standing', { who: id, kind: 'people', value: Math.round(25 * gauss(s.rng) + 15), label: 'Reputation in the city' });
     emit(s, 'standing', { who: id, kind: 'boni', value: Math.round(25 * gauss(s.rng) + 18), label: 'Reputation among the boni' });
     const groundwork: Record<string, number> = {};
@@ -255,7 +255,7 @@ export const offices: SystemDef = {
       place: 'campus',
       duration: () => 200,
       check: (s, a, p) => {
-        if (ageOf(s, a) < 17) return 'Too young to serve';
+        if (ageOf(s, a) < (p.staff ? 16 : 17)) return p.staff ? 'Too young even for a commander’s staff (16)' : 'Too young to serve as a tribune (17); at 16 you can join a commander’s staff';
         const camp = CAMPAIGNS.find((c) => c.id === p.campaign);
         if (!camp) return 'Choose a campaign';
         if (!campaignOpen(s, camp.id)) return 'That campaign is not under way';
@@ -264,7 +264,8 @@ export const offices: SystemDef = {
       odds: (_s, _a, p) => {
         const camp = CAMPAIGNS.find((c) => c.id === p.campaign);
         if (!camp) return null;
-        return { total: 1 - camp.risk, parts: [{ label: 'Return alive', value: 1 - camp.risk }] };
+        const risk = camp.risk * (p.staff ? 0.5 : 1);
+        return { total: 1 - risk, parts: [{ label: 'Return alive', value: 1 - risk }] };
       },
       start: (s, a, _p) => {
         emit(s, 'travel', { who: a.id, to: 'abroad', until: s.day + 200 });
@@ -272,15 +273,17 @@ export const offices: SystemDef = {
       },
       complete: (s, a, p) => {
         const camp = CAMPAIGNS.find((c) => c.id === p.campaign)!;
-        if (chance(s.rng, camp.risk)) {
+        if (chance(s.rng, camp.risk * (p.staff ? 0.5 : 1))) {
           emit(s, 'death', { who: a.id, cause: `killed on campaign in ${camp.label}` });
           return;
         }
         a.servedAbroad += 1;
         record(s, a.id, 'military_tribune', yearBC(s));
-        emit(s, 'standing', { who: a.id, kind: 'dignitas', value: camp.dignitas, label: `Served in ${camp.label}`, halfLife: 0 });
+        emit(s, 'standing', { who: a.id, kind: 'dignitas', value: camp.dignitas - (p.staff ? 1 : 0), label: `Served in ${camp.label}`, halfLife: 0 });
         const cmd = camp.commander ? byHistorical(s, camp.commander) : undefined;
-        if (cmd?.alive) emit(s, 'memory', { owner: cmd.id, about: a.id, act: `Served under me in ${camp.label}`, weight: 12, halfLife: 2000 });
+        // A young man on a commander's own staff lives at his table and becomes his protégé.
+        if (cmd?.alive) emit(s, 'memory', { owner: cmd.id, about: a.id, act: `Served under me in ${camp.label}`, weight: p.staff ? 20 : 12, halfLife: 2500 });
+        emit(s, 'skill', { who: a.id, skill: 'oratory', add: 1 });
         if (a.id === s.playerId) {
           emit(s, 'event.trigger', { eventId: 'returned_from_service', vars: { campaign: camp.label } });
         }
@@ -332,6 +335,7 @@ export const offices: SystemDef = {
     const d = dateOf(s.day);
     const y = d.yearBC;
     if (d.month === 2) departGovernors(s, y);
+    if (d.month === 1) offerService(s);
     if (d.month === QUAESTOR_ELECTION.openMonth && !openElection(s)) {
       s.offices.elections.push(newElection(s));
       emit(s, 'log', { text: `Candidates for the quaestorship of ${y - 1} BC may now give in their names.`, kind: 'election' });
@@ -369,6 +373,19 @@ export const offices: SystemDef = {
     return null;
   },
 };
+
+/** Each spring, until he has served, a young man is offered a place with an army leaving Rome. */
+function offerService(s: GameState) {
+  const pl = s.chars[s.playerId];
+  const age = ageOf(s, pl);
+  if (!pl.alive || pl.location !== 'rome' || age < 16 || pl.servedAbroad >= 1 || age > 30) return;
+  const open = CAMPAIGNS.filter((c) => c.commander && campaignOpen(s, c.id)).map((c) => ({ c, cmd: byHistorical(s, c.commander)! }));
+  if (!open.length) return;
+  open.sort((x, y) => standingOf(s, y.cmd.id, 'dignitas').total - standingOf(s, x.cmd.id, 'dignitas').total);
+  const { c, cmd } = open[0];
+  const staff = age < 17 ? 1 : 0;
+  emit(s, 'event.trigger', { eventId: 'legions', roles: { commander: cmd.id }, vars: { campaign: c.label, campaignId: c.id, risk: Math.round(c.risk * (staff ? 50 : 100)), staff, spainRisk: staff ? 2 : 3 } });
+}
 
 export function campaignOpen(s: GameState, id: string): boolean {
   const c = CAMPAIGNS.find((x) => x.id === id);

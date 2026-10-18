@@ -63,7 +63,9 @@ a { color: var(--red-dark); cursor: pointer; text-decoration: underline dotted; 
 .mapwrap canvas { display: block; }
 .mapnote { position: absolute; left: 8px; bottom: 6px; font-size: 0.8rem; color: var(--muted); }
 .place { overflow: auto; padding: 0.7rem 0.9rem; }
-.right { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.right { display: grid; grid-template-rows: auto auto 1fr; min-height: 0; }
+.whatnow { padding: 0.5rem 0.9rem; background: #fbf8f2; border-bottom: 2px solid var(--plaster-3); max-height: 38vh; overflow: auto; }
+.whatnow .list li { padding: 0.15rem 0; }
 .tabs { display: flex; gap: 0.2rem; padding: 0.4rem 0.5rem 0; background: var(--plaster-2); border-bottom: 2px solid var(--plaster-3); flex-wrap: wrap; }
 .tabs button { border-radius: 3px 3px 0 0; border-bottom: none; }
 .panel { overflow: auto; padding: 0.7rem 0.9rem; }

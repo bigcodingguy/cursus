@@ -1,0 +1,210 @@
+// Opportunities: the world comes to the player. The events system offers one of these after a quiet
+// spell (see `pace` in src/sim/systems/events). Each is drawn from people and systems already in play.
+
+import type { Cond, Group } from '../sim/dsl';
+import type { EventDef } from '../sim/systems/events/api';
+
+const inRome: Cond = { inRome: 'player' };
+const youngNoble = (extra: Cond[] = []): Group => ({
+  select: 'adultMen',
+  inRome: true,
+  where: { all: [{ num: { age: 'it' }, gte: 17, lte: 32 }, { not: { same: ['it', 'player'] } }, { not: { senator: 'it' } }, ...extra] },
+});
+
+export const OPPORTUNITIES: EventDef[] = [
+  {
+    id: 'opp_patron_task',
+    pool: 'opportunity',
+    title: 'A task from your patron',
+    cooldown: 220,
+    when: { all: [inRome, { inRome: 'player.patron' }] },
+    roles: { patron: 'player.patron' },
+    needs: ['patron'],
+    player: true,
+    text: '{patron} keeps you back after the salutatio. He needs a trustworthy young man to see a shipment of his oil sold at Ostia and the money counted honestly. Six days, and no glory in it.',
+    choices: [
+      { label: 'Do it gladly', effects: [{ occupy: 'player', days: 6 }, { memory: { owner: 'patron', about: 'player', act: 'Handled my business at Ostia', weight: 12, halfLife: 1500 } }, { favor: { debtor: 'patron', creditor: 'player', weight: 1, reason: 'Saw to my business at Ostia' } }], text: 'You sit on a crate at Ostia for six days counting jars. {patron} hears the sum to the last as and nods. He will remember.' },
+      { label: 'Make an excuse', effects: [{ memory: { owner: 'patron', about: 'player', act: 'Too busy to help me', weight: -6, halfLife: 700 } }], text: '{patron} says he understands. His steward gives you a look on the way out.' },
+    ],
+  },
+  {
+    id: 'opp_patron_candidate',
+    pool: 'opportunity',
+    title: 'Votes for a friend',
+    cooldown: 300,
+    when: { all: [inRome, { inRome: 'player.patron' }, { num: { election: 'daysLeft' }, lte: 55, gte: 5 }] },
+    roles: { patron: 'player.patron', cand: { pick: { select: 'adultMen', where: { all: [{ candidate: 'it' }, { connected: ['it', 'player.patron'] }, { not: { same: ['it', 'player'] } }] } }, random: true } },
+    needs: ['patron', 'cand'],
+    player: true,
+    text: '{patron} asks you to spend a week in the tribes for {cand}, who is standing for the quaestorship. “You know the men of Arpinum and the Cornelia. Shake hands for him.”',
+    choices: [
+      { label: 'Canvass for {cand}', effects: [{ occupy: 'player', days: 5 }, { memory: { owner: 'cand', about: 'player', act: 'Canvassed for me', weight: 14, halfLife: 2500 } }, { favor: { debtor: 'cand', creditor: 'player', weight: 1, reason: 'Canvassed for me' } }, { memory: { owner: 'patron', about: 'player', act: 'Worked for my friend', weight: 6 } }], text: 'A week of handshakes and names. You learn how a canvass is run, and {cand} owes you for it.' },
+      { label: 'Plead your own affairs', effects: [{ memory: { owner: 'patron', about: 'player', act: 'Would not canvass for my friend', weight: -6 } }], text: '{patron} finds someone else.' },
+    ],
+  },
+  {
+    id: 'opp_junior_counsel',
+    pool: 'opportunity',
+    title: 'Junior counsel',
+    cooldown: 150,
+    when: { all: [inRome, { num: { age: 'player' }, gte: 16 }] },
+    roles: { lead: { pick: { select: 'adultMen', inRome: true, where: { all: [{ leadsCase: 'it' }, { not: { same: ['it', 'player'] } }, { num: { opinion: ['it', 'player'] }, gte: -5 }] } }, best: { opinion: ['it', 'player'] } } },
+    needs: ['lead'],
+    player: true,
+    text: '{lead} has an extortion case before the court and is short of help. He has seen you about the tribunals. Would you sit beside him as junior counsel — take a witness, speak a little, learn a great deal?',
+    choices: [
+      { label: 'Accept', effects: [{ signal: 'join_counsel' }], text: 'You join {lead}’s side of the case. You will be at the trial; the other side will remember your face.' },
+      { label: 'Decline', effects: [{ memory: { owner: 'lead', about: 'player', act: 'Turned down my case', weight: -4, halfLife: 600 } }] , text: 'He shrugs. There are other young men.' },
+    ],
+  },
+  {
+    id: 'opp_client_trouble',
+    pool: 'opportunity',
+    title: 'A client at your door',
+    cooldown: 160,
+    when: inRome,
+    roles: { client: { pick: { select: 'all', inRome: true, where: { patronOf: ['player', 'it'] } }, random: true } },
+    needs: ['client'],
+    player: true,
+    text: '{client} is waiting at dawn with his hat in his hands. His landlord has had his goods seized over two months’ rent he swears he paid. He asks for your protection — that is what a patron is for.',
+    choices: [
+      { label: 'Pay the landlord yourself (HS 2,000)', when: { num: { cash: 'player' }, gte: 2000 }, effects: [{ money: { who: 'player', amount: -2000, reason: 'help for a client' } }, { memory: { owner: 'client', about: 'player', act: 'Paid my debt when I was desperate', weight: 15, halfLife: 3000 } }, { standing: { who: 'player', kind: 'people', value: 1.5, label: 'Stands by his clients' } }], text: 'The goods come back on a handcart. {client} tells everyone in his street.' },
+      {
+        label: 'Go before the praetor with him',
+        risk: {
+          chance: { base: 0.35, label: 'A clear case, if you know the law', mods: [{ label: 'Your knowledge of the law', add: { mul: [{ law: 'player' }, 0.008] } }], min: 0.05, max: 0.95 },
+          success: [{ occupy: 'player', days: 2 }, { memory: { owner: 'client', about: 'player', act: 'Won my case before the praetor', weight: 18, halfLife: 3000 } }, { standing: { who: 'player', kind: 'people', value: 2, label: 'Stands by his clients' } }, { train: 'player', skill: 'law', add: 1.5 }],
+          failure: [{ occupy: 'player', days: 2 }, { memory: { owner: 'client', about: 'player', act: 'Tried to help me', weight: 4 } }, { train: 'player', skill: 'law', add: 1 }],
+          successText: 'The praetor hears you out and orders the goods returned. {client} kisses your hand in the street.',
+          failureText: 'The landlord’s advocate is better than you. The praetor finds for him. {client} thanks you anyway.',
+        },
+      },
+      { label: 'Send him away', effects: [{ memory: { owner: 'client', about: 'player', act: 'Turned me away when I needed him', weight: -18, halfLife: 3000 } }, { standing: { who: 'player', kind: 'people', value: -1, label: 'Abandons his clients' } }], text: 'He goes. Clients talk to each other.' },
+    ],
+  },
+  {
+    id: 'opp_dinner_invitation',
+    pool: 'opportunity',
+    title: 'An invitation',
+    cooldown: 90,
+    when: inRome,
+    roles: {
+      host: { pick: { select: 'senators', inRome: true, where: { num: { opinion: ['it', 'player'] }, gte: -5 } }, random: true },
+      guest: { pick: { select: 'senators', inRome: true }, random: true },
+    },
+    needs: ['host', 'guest'],
+    player: true,
+    text: '{host} sends a slave with an invitation to dine tomorrow. {guest} will be there. A new man does not get many such invitations.',
+    choices: [
+      { label: 'Accept', effects: [{ occupy: 'player', days: 1 }, { memory: { owner: 'host', about: 'player', act: 'Good company at my table', weight: 7, halfLife: 700 } }, { memory: { owner: 'guest', about: 'player', act: 'Met him at dinner', weight: 5, halfLife: 700 } }, { signal: 'hear_gossip' }], text: 'Nine on the couches, a boar from Lucania, and an hour of talk about the Senate. {guest} asks where you come from and does not sneer at the answer.' },
+      { label: 'Send regrets', effects: [{ memory: { owner: 'host', about: 'player', act: 'Declined my invitation', weight: -3, halfLife: 300 } }], text: 'You send a polite note.' },
+    ],
+  },
+  {
+    id: 'opp_banker',
+    pool: 'opportunity',
+    title: 'A proposition at the bankers’ stalls',
+    cooldown: 300,
+    when: { all: [inRome, { num: { age: 'player' }, gte: 17 }] },
+    roles: { banker: { pick: { select: 'adultMen', inRome: true, where: { charFlag: 'it', key: 'banker' } }, random: true } },
+    needs: ['banker'],
+    player: true,
+    text: '{banker} has a share going in a cargo of Campanian wine bound for Massilia: HS 8,000 in, and if the ship arrives, HS 16,000 back by autumn. Or, if you would rather, he will advance you HS 20,000 at three-quarters of a percent a month.',
+    choices: [
+      {
+        label: 'Take the share in the cargo',
+        when: { num: { cash: 'player' }, gte: 8000 },
+        effects: [{ money: { who: 'player', amount: -8000, reason: 'a share in a cargo' } }],
+        risk: {
+          chance: { base: 0.65, label: 'Summer seas, pirates off Liguria', mods: [] },
+          success: [{ money: { who: 'player', amount: 16000, reason: 'a cargo arrived' } }, { memory: { owner: 'banker', about: 'player', act: 'A partner who keeps his nerve', weight: 6 } }],
+          failure: [],
+          successText: 'The ship comes into Massilia in good order. {banker} counts sixteen thousand into your hands.',
+          failureText: 'The ship is lost off Liguria — storm or pirates, nobody knows. Your eight thousand are at the bottom of the sea.',
+        },
+      },
+      { label: 'Take the loan', effects: [{ lend: { lender: 'banker', borrower: 'player', amount: 20000, months: 12, monthlyRate: 0.0075 } }], text: 'Twenty thousand on easy terms. It will have to be paid back in a year, or rolled over at his pleasure.' },
+      { label: 'Neither', text: '{banker} smiles. Another time.' },
+    ],
+  },
+  {
+    id: 'opp_peer_support',
+    pool: 'opportunity',
+    title: 'A friend in a quarrel',
+    cooldown: 150,
+    when: inRome,
+    roles: { peer: { pick: youngNoble([{ num: { opinion: ['it', 'player'] }, gte: 0 }]), random: true } },
+    needs: ['peer'],
+    player: true,
+    text: '{peer} has been insulted in the Forum by an older man, and means to answer him before a crowd tomorrow. He asks you to stand with him — numbers matter, and so do friends who will speak.',
+    choices: [
+      { label: 'Stand with him', effects: [{ occupy: 'player', days: 1 }, { memory: { owner: 'peer', about: 'player', act: 'Stood by me in the Forum', weight: 14, halfLife: 3000 } }, { favor: { debtor: 'peer', creditor: 'player', weight: 1, reason: 'Stood by me in a quarrel' } }, { tie: { a: 'player', b: 'peer', kind: 'amicus' } }], text: 'There is shouting and nothing worse. {peer} embraces you afterwards in front of everyone.' },
+      { label: 'Lend him HS 5,000 for his debts instead', when: { num: { cash: 'player' }, gte: 5000 }, effects: [{ lend: { lender: 'player', borrower: 'peer', amount: 5000, months: 12, monthlyRate: 0.005 } }, { favor: { debtor: 'peer', creditor: 'player', weight: 1, reason: 'Lent me money' } }, { memory: { owner: 'peer', about: 'player', act: 'Lent me money when I needed it', weight: 8 } }], text: 'Money is a quieter kind of friendship.' },
+      { label: 'Stay out of it', effects: [{ memory: { owner: 'peer', about: 'player', act: 'Left me alone in the Forum', weight: -8, halfLife: 1500 } }], text: 'He goes without you.' },
+    ],
+  },
+  {
+    id: 'opp_slight',
+    pool: 'opportunity',
+    title: 'A sneer',
+    cooldown: 250,
+    when: { all: [inRome, { num: { age: 'player' }, gte: 17 }] },
+    roles: { rival: { pick: youngNoble([{ num: { opinion: ['it', 'player'] }, lte: 0 }]), random: true } },
+    needs: ['rival'],
+    player: true,
+    text: 'Outside the Basilica, {rival} imitates your Arpinate vowels for the benefit of his friends. “The new men are coming to Rome with their onions and their accents.” People are watching.',
+    choices: [
+      {
+        label: 'Answer him',
+        risk: {
+          chance: { base: 0.25, label: 'A quick tongue', mods: [{ label: 'Your oratory', add: { mul: [{ oratory: 'player' }, 0.008] } }], min: 0.05, max: 0.9 },
+          success: [{ standing: { who: 'player', kind: 'people', value: 3, label: 'Bested a noble in the street' } }, { memory: { owner: 'rival', about: 'player', act: 'Made a fool of me', weight: -12, halfLife: 2000 } }, { train: 'player', skill: 'oratory', add: 1 }],
+          failure: [{ standing: { who: 'player', kind: 'people', value: -1, label: 'Laughed at in the Forum' } }, { memory: { owner: 'rival', about: 'player', act: 'A bumpkin', weight: -4 } }],
+          successText: '“At least in Arpinum,” you say, “our grandfathers’ names are our own.” The crowd laughs at him, not you.',
+          failureText: 'Your answer comes out too slow and too angry. They laugh harder.',
+        },
+      },
+      { label: 'Let it pass', text: 'You walk on. It stings for a day.' },
+    ],
+  },
+  {
+    id: 'opp_father_letter',
+    pool: 'opportunity',
+    title: 'A letter from Arpinum',
+    cooldown: 300,
+    when: { all: [inRome, { alive: 'player.father' }] },
+    roles: { father: 'player.father' },
+    needs: ['father'],
+    player: true,
+    text: 'Your father writes: the olives are in, your mother is well, the mill wheel needs mending. He asks how you do in Rome and whether the great men have noticed you. He signs it, as always, with advice about keeping out of debt.',
+    choices: [
+      { label: 'Write back with your news and respects', effects: [{ memory: { owner: 'father', about: 'player', act: 'Writes to me faithfully', weight: 6, halfLife: 1000 } }], text: 'You write two careful pages.' },
+      {
+        label: 'Ask him for money',
+        risk: {
+          chance: { base: 0.6, label: 'A father’s patience', mods: [{ label: 'His regard for you', add: { mul: [{ opinion: ['father', 'player'] }, 0.006] } }], min: 0.05, max: 0.95 },
+          success: [{ give: { from: 'father', to: 'player', amount: 6000, reason: 'a gift from your father' } }],
+          failure: [{ memory: { owner: 'father', about: 'player', act: 'Always asking for money', weight: -6 } }],
+          successText: 'He sends six thousand sesterces, with a page about thrift.',
+          failureText: 'He sends a page about thrift and nothing else.',
+        },
+      },
+      { label: 'Go home to Arpinum for a month', effects: [{ travel: 'player', to: 'arpinum', days: 30 }, { memory: { owner: 'father', about: 'player', act: 'Came home to see us', weight: 15, halfLife: 2000 } }], text: 'You ride south. Thirty days of country food and your mother’s questions.' },
+    ],
+  },
+  {
+    id: 'opp_elder_notice',
+    pool: 'opportunity',
+    title: 'An old senator takes notice',
+    cooldown: 400,
+    when: { all: [inRome, { num: { age: 'player' }, lte: 22 }] },
+    roles: { elder: { pick: { select: 'senators', inRome: true, where: { all: [{ num: { opinion: ['it', 'player'] }, gte: 3 }, { num: { age: 'it' }, gte: 45 }] } }, best: { opinion: ['it', 'player'] } } },
+    needs: ['elder'],
+    player: true,
+    text: '{elder}, who has seen you about the Forum, stops you and asks your name and your father’s. He likes what he hears. Would you care to come to his house and hear how things were done in his day?',
+    choices: [
+      { label: 'Go, and listen', effects: [{ occupy: 'player', days: 1 }, { memory: { owner: 'elder', about: 'player', act: 'A young man who listens', weight: 12, halfLife: 2500 } }, { train: 'player', skill: 'law', add: 1.5 }], text: 'He talks for three hours about the war with Perseus. Some of it is useful. All of it is flattering to be told.' },
+      { label: 'Thank him, and go about your business', text: 'He nods. Young men are always in a hurry.' },
+    ],
+  },
+];
