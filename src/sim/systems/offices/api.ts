@@ -227,7 +227,7 @@ export function appealParts(p: Profile, unit: string | Unit): { label: string; v
     for (const x of p.endorsers) endorse += (x.dig / 100) * (x.tribe === u.id ? 0.8 : 0.12);
     if (endorse) parts.push({ label: 'Endorsements', value: Math.min(1, endorse) });
   }
-  if (p.expected) parts.push({ label: 'Everyone expects him to win', value: 2.0 });
+  if (p.expected) parts.push({ label: 'Everyone expects him to win', value: 2.8 });
   // The nobles guard the consulship: the centuries of the rich do not lightly elect a man without consular ancestors.
   if (p.newMan) parts.push({ label: 'A new man: no consul among his ancestors', value: -1.6 * u.wealth });
   return parts;
