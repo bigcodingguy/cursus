@@ -7,15 +7,16 @@ import { standingOf } from '../sim/systems/standing/api';
 import type { GameState, PlaceId } from '../sim/types';
 import { ageOf, fmtHS } from '../sim/util';
 import { CityMap } from './CityMap';
-import { consulsLine, dateLine, UICtx, Why, type Tab } from './common';
+import { consulsLine, dateLine, mainTab, Section, UICtx, Why, type Tab } from './common';
 import { EventModal, TrialModal, VoteModal } from './Modals';
-import { CasePanel, ChroniclePanel, ElectionPanel, FavorsPanel, GossipPanel, PeoplePanel, PersonPanel } from './Panels';
+import { CasePanel, ChroniclePanel, ElectionPanel, FavorsPanel, GossipPanel, PersonPanel } from './Panels';
+import { CircleCards } from './Circle';
 import { PlacePanel } from './PlacePanel';
 import { WhatNow } from './WhatNow';
 import { FamilyPanel, LawsPanel } from './HousePanels';
 import { pendingProposals } from '../sim/systems/assembly/api';
 import { playerCase } from '../sim/systems/courts/api';
-import { openElections } from '../sim/systems/offices/api';
+import { electionOfCandidate, openElections } from '../sim/systems/offices/api';
 import { exportSave, importSave, loadSlot, quit, saveSlot, setSpeed, slotInfo, SPEEDS, startNew, toast, useStore } from './store';
 import { plainDate } from '../sim/calendar';
 import { blockedBy } from '../sim/core';
@@ -126,10 +127,11 @@ function Help({ onClose }: { onClose: () => void }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>How to play</h2>
         <p><b>Time.</b> One day passes per tick. Use the speed buttons (or the space bar) to let time run; the game pauses itself when something needs you.</p>
-        <p><b>Places.</b> Click a district on the map to see what you can do there and who lives there. The Forum has speeches, courts and bankers; the Campus Martius has the army and the elections; your house in the Carinae is where you set your mornings and give dinners.</p>
-        <p><b>People.</b> Everyone remembers what you did. Hover over any underlined number to see where it comes from. Favors owed make requests easier — and are spent when used.</p>
-        <p><b>The road.</b> Serve a campaign abroad. Make a name — a prosecution of a corrupt governor is the classic way. At 27 you may stand for quaestor (the vote is each 25 Quintilis). Win and you enter the Senate.</p>
-        <p><b>Odds.</b> When you gamble, the chance shown is the chance used.</p>
+        <p><b>The city.</b> Click a district on the map to act there: the Forum for speeches, courts and bankers; the Campus Martius for the army and the elections; your own house for your mornings and dinners.</p>
+        <p><b>People.</b> The cards on the right are the few people who matter to you now. Click one to see what he remembers of you and to call on him, ask a favor, or invite him to dine. Everyone else is a click away under “Everyone in Rome”, but you never need it.</p>
+        <p><b>Now.</b> The dark box at the top right always says what you are doing and what to do next.</p>
+        <p><b>House, Forum, Record.</b> Your family and debts; the laws, your case, the elections and the gossip; the calendar and what has happened.</p>
+        <p><b>Numbers.</b> Everything is said in words first. Hover over an underlined phrase to see the numbers behind it. When you gamble, the chance shown is the chance used.</p>
         <div className="choices"><button onClick={onClose}>Close</button></div>
       </div>
     </div>
@@ -203,9 +205,10 @@ function Ended({ s }: { s: GameState }) {
 }
 
 function Game({ s, speed, version }: { s: GameState; speed: number; version: number }) {
-  const [place, setPlace] = useState<PlaceId>('carinae');
-  const [person, setPerson] = useState<string | null>(s.playerId);
-  const [tab, setTab] = useState<Tab>('person');
+  const [place, setPlaceRaw] = useState<PlaceId>(s.chars[s.playerId].home);
+  const [placeOpen, setPlaceOpen] = useState(false);
+  const [person, setPerson] = useState<string | null>(null);
+  const [tab, setTabRaw] = useState<Tab>('people');
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT') return;
@@ -213,61 +216,88 @@ function Game({ s, speed, version }: { s: GameState; speed: number; version: num
         e.preventDefault();
         setSpeed(speed ? 0 : 2);
       }
+      if (e.code === 'Escape') setPlaceOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [speed]);
   const [guests, setGuests] = useState<string[]>([]);
-  const ui = { place, setPlace, person, showPerson: (id: string) => { setPerson(id); setTab('person'); }, tab, setTab, guests, setGuests };
+  const setPlace = (p: PlaceId) => {
+    setPlaceRaw(p);
+    setPlaceOpen(true);
+  };
+  const setTab = (t: Tab) => {
+    setTabRaw(mainTab(t));
+    if (t !== 'person') setPerson(null);
+  };
+  const ui = { place, setPlace, person, showPerson: (id: string) => { setPerson(id); setTabRaw('people'); }, tab, setTab, guests, setGuests };
   const heardNew = s.news.items.filter((g) => !g.heard && g.day <= s.day).length;
-  // Case and election tabs appear only while there is one.
+  const active = (playerCase(s) ? 1 : 0) + (openElections(s).length ? 1 : 0) + pendingProposals(s).length;
+  const cur = mainTab(tab);
   const tabs: [Tab, string][] = [
-    ['person', 'Person'],
     ['people', 'People'],
-    ['family', 'Family'],
-    ['laws', `Laws${pendingProposals(s).length ? ` (${pendingProposals(s).length})` : ''}`],
-    ['favors', 'Favors'],
-    ['gossip', `Gossip${heardNew ? ` (${heardNew})` : ''}`],
-    ['chronicle', 'Calendar'],
-    ...(playerCase(s) ? [['case', 'Case'] as [Tab, string]] : []),
-    ...(openElections(s).length ? [['election', 'Elections'] as [Tab, string]] : []),
+    ['house', 'House'],
+    ['forum', `Forum${active ? ` · ${active}` : heardNew ? ` · ${heardNew} new` : ''}`],
+    ['record', 'Record'],
   ];
   return (
     <UICtx.Provider value={ui}>
       <div className="app">
         <TopBar s={s} speed={speed} />
         <div className="main">
-          <div className="left">
-            <div className="mapwrap">
-              <CityMap s={s} selected={place} onSelect={setPlace} version={version} />
-              <div className="mapnote">Placeholder plan of Rome. Click a district.</div>
-            </div>
-            <div className="place">
-              <PlacePanel s={s} place={place} />
-            </div>
+          <div className="stage">
+            <CityMap s={s} selected={place} onSelect={setPlace} version={version} />
+            {!placeOpen && <div className="maphint">Click a district to act there.</div>}
+            {placeOpen && (
+              <div className="placeDrawer">
+                <button className="ghost close" onClick={() => setPlaceOpen(false)} title="Close (Esc)">×</button>
+                <PlacePanel s={s} place={place} />
+              </div>
+            )}
           </div>
-          <div className="right">
+          <aside className="side">
             <WhatNow s={s} />
             <div className="tabs">
               {tabs.map(([t, label]) => (
-                <button key={t} className={`ghost ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>
+                <button key={t} className={`ghost ${cur === t ? 'on' : ''}`} onClick={() => setTab(t)}>
                   {label}
                 </button>
               ))}
-              <button className="ghost" onClick={() => { setPerson(s.playerId); setTab('person'); }}>You</button>
             </div>
             <div className="panel">
-              {tab === 'person' && <PersonPanel s={s} id={person} />}
-              {tab === 'people' && <PeoplePanel s={s} />}
-              {tab === 'favors' && <FavorsPanel s={s} />}
-              {tab === 'gossip' && <GossipPanel s={s} />}
-              {tab === 'chronicle' && <ChroniclePanel s={s} />}
-              {tab === 'case' && <CasePanel s={s} />}
-              {tab === 'election' && <ElectionPanel s={s} />}
-              {tab === 'family' && <FamilyPanel s={s} />}
-              {tab === 'laws' && <LawsPanel s={s} />}
+              {cur === 'people' && (person ? (
+                <>
+                  <a className="small" onClick={() => setPerson(null)}>← Your circle</a>
+                  <PersonPanel s={s} id={person} />
+                </>
+              ) : (
+                <>
+                  <div className="spread">
+                    <h3 style={{ marginTop: 0 }}>Your circle</h3>
+                    <a className="small" onClick={() => setPerson(s.playerId)}>You →</a>
+                  </div>
+                  <CircleCards s={s} />
+                </>
+              ))}
+              {cur === 'house' && (
+                <>
+                  <FamilyPanel s={s} />
+                  <Section title="Favors and debts">
+                    <FavorsPanel s={s} />
+                  </Section>
+                </>
+              )}
+              {cur === 'forum' && (
+                <>
+                  {playerCase(s) && <Section title="Your case" open><CasePanel s={s} /></Section>}
+                  {openElections(s).length > 0 && <Section title="The elections" open={!!electionOfCandidate(s, s.playerId)}><ElectionPanel s={s} /></Section>}
+                  <Section title={`Laws before the people${pendingProposals(s).length ? ` (${pendingProposals(s).length})` : ''}`} open={pendingProposals(s).length > 0}><LawsPanel s={s} /></Section>
+                  <Section title={`Gossip${heardNew ? ` (${heardNew} new)` : ''}`} open={!playerCase(s) && !pendingProposals(s).length}><GossipPanel s={s} /></Section>
+                </>
+              )}
+              {cur === 'record' && <ChroniclePanel s={s} />}
             </div>
-          </div>
+          </aside>
         </div>
       </div>
       <EventModal s={s} />

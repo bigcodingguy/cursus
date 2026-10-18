@@ -6,7 +6,7 @@ import { cashOf, debtOf, loansHeldBy, loansOwedBy } from '../sim/systems/money/a
 import { favorBalance, favorsOwed, memoriesAbout, opinion, tiesOf } from '../sim/systems/network/api';
 import { ASK_LABELS, askBlocked, type Ask } from '../sim/systems/city';
 import { ActionRow } from './PlacePanel';
-import { recentlyRemembered, seenAs, whyMatters } from './people';
+import { recentlyRemembered, seenAs, stanceLine, whyMatters, youDid } from './people';
 import { clientsOf } from '../sim/systems/news';
 import { appealParts, assemblyOf, officesOf, openElection, openElections, profileOf, profiles, voteGap, voteOnce, winChance } from '../sim/systems/offices/api';
 import { standingOf } from '../sim/systems/standing/api';
@@ -14,6 +14,13 @@ import type { GameState } from '../sim/types';
 import { ageOf, fmtHS, fullName, shortName } from '../sim/util';
 import { BreakdownTable, leanLabel, Name, Odds, opinionWord, Portrait, shortDate, skillWord, traitWords, useUI, Why } from './common';
 import { run } from './store';
+
+function rankWords(d: number): string {
+  return d >= 80 ? 'one of the first men of Rome' : d >= 55 ? 'a man of high rank' : d >= 30 ? 'a man of some standing' : d >= 10 ? 'of modest standing' : 'of no standing yet';
+}
+function favorWords(v: number, who: string): string {
+  return v >= 40 ? `a favorite of ${who}` : v >= 15 ? `liked by ${who}` : v > -15 ? `little known to ${who}` : v > -40 ? `disliked by ${who}` : `hated by ${who}`;
+}
 
 export function PersonPanel({ s, id }: { s: GameState; id: string | null }) {
   const ui = useUI();
@@ -60,48 +67,34 @@ export function PersonPanel({ s, id }: { s: GameState; id: string | null }) {
           {traitWords(c).join(', ') || 'unremarkable'}; {leanLabel(c.lean)}. Oratory: {skillWord(c.oratory)}{me ? ` (${Math.round(c.oratory)})` : ''}. Law: {skillWord(c.law)}{me ? ` (${Math.round(c.law)})` : ''}.
         </p>
       )}
-      <div className="row small">
-        <span>Dignitas <Why b={dig}><b>{dig.total}</b></Why></span>
-        <span>· People <Why b={people}><b>{people.total}</b></Why></span>
-        <span>· Boni <Why b={boni}><b>{boni.total}</b></Why></span>
+      <div className="small">
+        <Why b={dig} note="Dignitas: rank and honor.">{rankWords(dig.total)}</Why>; <Why b={people} note="Favor of the people.">{favorWords(people.total, 'the people')}</Why>; <Why b={boni} note="Favor of the boni.">{favorWords(boni.total, 'the boni')}</Why>.
       </div>
-      {!me && c.alive && <PersonActions s={s} id={c.id} />}
       {!me && c.alive && (
-        <>
-          <h3>What he thinks of you</h3>
-          <div className="card">
-            <Why b={op}>
-              <b>{opinionWord(op.total)}</b> ({op.total > 0 ? '+' : ''}{op.total})
-            </Why>
-            <div className="small" style={{ marginTop: 4 }}>
-              <BreakdownTableLight b={op} />
-            </div>
-          </div>
-          <h4>He remembers</h4>
-          {mems.length ? (
-            <ul className="list small">
-              {mems.map((m, i) => (
-                <li key={i} className="spread">
-                  <span>“{m.act}” · {shortDate(m.day)}</span>
-                  <span className={m.now >= 0 ? 'good' : 'bad'}>{m.now > 0 ? '+' : ''}{m.now.toFixed(1)}{m.halfLife ? '' : ' · never fades'}</span>
+        <div className="card" style={{ marginTop: '0.6rem' }}>
+          <Why b={op} note="What he thinks of you, and why (hover for the numbers).">
+            <b>{stanceLine(s, c.id)}</b>
+          </Why>
+          {mems.length > 0 && (
+            <ul className="list small" style={{ marginTop: 4 }}>
+              {mems.slice(0, 6).map((m, i) => (
+                <li key={i} className={m.now >= 0 ? 'good' : 'bad'}>
+                  <Why b={{ total: Math.round(m.now * 10) / 10, parts: [{ label: `“${m.act}”, ${shortDate(m.day)}`, value: Math.round(m.now * 10) / 10 }] }} note={m.halfLife ? 'Fades with time.' : 'He will never forget it.'}>
+                    {youDid(m.act).replace(/^./, (x) => x.toUpperCase())}
+                  </Why>
+                  <span className="muted"> · {shortDate(m.day)}</span>
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className="small muted">Nothing you have done, yet.</p>
           )}
-          <div className="small" style={{ marginTop: 6 }}>
-            You think of him: <Why b={mine}>{opinionWord(mine.total)}</Why>.
+          {owesMe.length > 0 && <div className="small good">He owes you: {owesMe.map((f) => f.reason.toLowerCase()).join('; ')}.</div>}
+          {iOwe.length > 0 && <div className="small bad">You owe him: {iOwe.map((f) => f.reason.toLowerCase()).join('; ')}.</div>}
+          <div className="small muted" style={{ marginTop: 4 }}>
+            You think of him: <Why b={mine}>{opinionWord(mine.total).toLowerCase()}</Why>.
           </div>
-          {(owesMe.length > 0 || iOwe.length > 0) && <h4>Favors</h4>}
-          {owesMe.map((f) => (
-            <div key={f.id} className="small good">He owes you: {f.reason} (weight {f.weight})</div>
-          ))}
-          {iOwe.map((f) => (
-            <div key={f.id} className="small bad">You owe him: {f.reason} (weight {f.weight})</div>
-          ))}
-        </>
+        </div>
       )}
+      {!me && c.alive && <PersonActions s={s} id={c.id} />}
       {me && <YourselfDetails s={s} />}
       {offs.length > 0 && (
         <>
@@ -222,21 +215,6 @@ function YourselfDetails({ s }: { s: GameState }) {
         {acct?.income ? ` · estates ${fmtHS(acct.income)} a year` : ''} · household {fmtHS(acct?.upkeep ?? 0)} a year
       </div>
     </>
-  );
-}
-
-function BreakdownTableLight({ b }: { b: { total: number; parts: { label: string; value: number }[] } }) {
-  return (
-    <table className="t">
-      <tbody>
-        {b.parts.map((p, i) => (
-          <tr key={i}>
-            <td>{p.label}</td>
-            <td style={{ textAlign: 'right' }} className={p.value >= 0 ? 'good' : 'bad'}>{p.value > 0 ? '+' : ''}{Math.round(p.value)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }
 

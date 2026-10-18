@@ -3,9 +3,14 @@ import { auc, dateOf, plainDate, romanDate } from '../sim/calendar';
 import { currentHolders } from '../sim/systems/offices/api';
 import type { Breakdown, Character, GameState, PlaceId } from '../sim/types';
 import { fullName, shortName } from '../sim/util';
+import { displayName } from './people';
 
 // ---------------- UI selection context ----------------
-export type Tab = 'person' | 'people' | 'family' | 'laws' | 'favors' | 'gossip' | 'chronicle' | 'case' | 'election';
+/** The four sidebar tabs. Older names (family, laws, case…) still work and map onto them. */
+export type Tab = 'people' | 'house' | 'forum' | 'record' | 'person' | 'family' | 'laws' | 'favors' | 'gossip' | 'chronicle' | 'case' | 'election';
+export function mainTab(t: Tab): 'people' | 'house' | 'forum' | 'record' {
+  return t === 'person' || t === 'people' ? 'people' : t === 'family' || t === 'favors' || t === 'house' ? 'house' : t === 'chronicle' || t === 'record' ? 'record' : 'forum';
+}
 export interface UI {
   place: PlaceId;
   setPlace: (p: PlaceId) => void;
@@ -79,7 +84,7 @@ export function Name({ s, id, full }: { s: GameState; id: string | undefined | n
   if (c.id === s.playerId) return <span>you</span>;
   return (
     <a onClick={() => ui.showPerson(c.id)} title={fullName(c)}>
-      {full ? fullName(c) : shortName(c)}
+      {displayName(s, c, full)}
       {!c.alive && ' †'}
     </a>
   );
@@ -151,5 +156,15 @@ export function Portrait({ c }: { c: Character }) {
     <div className="portrait" style={{ background: hue }}>
       {ini}
     </div>
+  );
+}
+
+/** A collapsible section: secondary things stay folded until wanted. */
+export function Section({ title, open, children }: { title: string; open?: boolean; children: ReactNode }) {
+  return (
+    <details className="section" open={open}>
+      <summary>{title}</summary>
+      <div className="sectionBody">{children}</div>
+    </details>
   );
 }

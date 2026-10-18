@@ -6,12 +6,13 @@ import { dateOf, dayOf } from '../sim/calendar';
 import { getAction } from '../sim/core';
 import { playerCase } from '../sim/systems/courts/api';
 import { loansHeldBy, loansOwedBy } from '../sim/systems/money/api';
-import { favorBalance, hasTie, memoryValue, opinion } from '../sim/systems/network/api';
+import { favorBalance, hasTie, memoriesAbout, memoryValue, opinion } from '../sim/systems/network/api';
+import { heirOf } from '../sim/systems/family/api';
 import { campaignOpen } from '../sim/systems/offices';
 import { candidacyOf, electionOfCandidate, heldEver, ineligibleFor, openElection, openElections } from '../sim/systems/offices/api';
 import { standingOf } from '../sim/systems/standing/api';
-import type { CharId, GameState, OfficeId, PlaceId } from '../sim/types';
-import { ageOf, shortName } from '../sim/util';
+import type { Character, CharId, GameState, OfficeId, PlaceId } from '../sim/types';
+import { ageOf, allChars, fullName, shortName } from '../sim/util';
 
 export interface Reason {
   text: string;
@@ -27,6 +28,12 @@ export function whyMatters(s: GameState, id: CharId): Reason[] {
   const out: Reason[] = [];
   const add = (text: string, weight: number, tone: Reason['tone'] = 'plain') => out.push({ text, weight, tone });
   if (me.fatherId === id) add('Your father', 10, 'good');
+  if (me.motherId === id) add('Your mother', 6, 'good');
+  if (me.spouseId === id) add('Your wife', 9, 'good');
+  if (c.fatherId === me.id) add(heirOf(s, me.id) === id ? `Your heir, ${ageOf(s, c)}` : `Your ${c.female ? 'daughter' : 'son'}, ${ageOf(s, c)}`, heirOf(s, me.id) === id ? 9 : 7, 'good');
+  if (!c.female && c.fatherId && c.fatherId === me.fatherId) add('Your brother', 6, 'good');
+  // Anyone in a decision waiting for you.
+  if (s.events.pending.some((p) => Object.values(p.roles).includes(id))) add('Waiting on your answer', 9);
   if (me.patronId === id) add('Your patron', 9, 'good');
   if (c.patronId === me.id) add('Your client', 6, 'good');
   if (me.patronId && c.patronId === me.patronId) add('Fellow client of your patron', 2);
@@ -34,9 +41,9 @@ export function whyMatters(s: GameState, id: CharId): Reason[] {
   if (hasTie(s, me.id, id, 'amicus')) add('Your friend', 5, 'good');
   if (hasTie(s, me.id, id, 'inimicus')) add('Your enemy', 7, 'bad');
   const owes = favorBalance(s, id, me.id);
-  if (owes > 0) add(`Owes you ${owes > 1 ? `${owes} favors` : 'a favor'}`, 4 + owes, 'good');
+  if (owes > 0) add(`Owes you ${owes > 1 ? `${owes} favors` : 'a favor'}`, 3 + Math.min(owes, 2), 'good');
   const owe = favorBalance(s, me.id, id);
-  if (owe > 0) add(`You owe him ${owe > 1 ? `${owe} favors` : 'a favor'}`, 4 + owe, 'bad');
+  if (owe > 0) add(`You owe him ${owe > 1 ? `${owe} favors` : 'a favor'}`, 3 + Math.min(owe, 2), 'bad');
   if (loansOwedBy(s, me.id).some((l) => l.lender === id)) add('Your creditor', 6, 'bad');
   if (me.fatherId && loansOwedBy(s, me.fatherId).some((l) => l.lender === id)) add('Your father’s creditor', 6, 'bad');
   if (loansHeldBy(s, me.id).some((l) => l.borrower === id)) add('Owes you money', 3, 'good');
@@ -58,6 +65,102 @@ export function whyMatters(s: GameState, id: CharId): Reason[] {
   if (c.rank !== 'plebs' && !c.female && Math.abs(c.bornBC - me.bornBC) <= 4) add('A young man of your age', 1);
   if (c.flags.banker) add('A banker', 1);
   return out.sort((a, b) => b.weight - a.weight);
+}
+
+/** What you would call him in a sentence: Scaurus, Marius, Caecilia. */
+export function callName(c: Character): string {
+  if (c.female) return c.nomen;
+  return c.cognomen ? c.cognomen.split(' ').slice(-1)[0] : c.nomen;
+}
+
+// Same-named men (fathers and sons share names) are told apart by age. Cached per state, refreshed monthly.
+const nameCache = new WeakMap<GameState, { key: string; counts: Map<string, number> }>();
+/** His short name, with his age added when another living man shares it. */
+export function displayName(s: GameState, c: Character, full = false): string {
+  const key = `${Math.floor(s.day / 30)}:${s.nextCharId}`;
+  let nc = nameCache.get(s);
+  if (!nc || nc.key !== key) {
+    const counts = new Map<string, number>();
+    for (const x of allChars(s)) if (x.alive) counts.set(shortName(x), (counts.get(shortName(x)) ?? 0) + 1);
+    nc = { key, counts };
+    nameCache.set(s, nc);
+  }
+  const base = full ? fullName(c) : shortName(c);
+  return c.alive && (nc.counts.get(shortName(c)) ?? 0) > 1 ? `${base} (${ageOf(s, c)})` : base;
+}
+
+/** A plain-language line on where you stand with him: words, not numbers. */
+export function stanceLine(s: GameState, id: CharId): string {
+  const c = s.chars[id];
+  const op = opinion(s, id, s.playerId).total;
+  const verb = op >= 45 ? 'is devoted to you' : op >= 25 ? 'thinks highly of you' : op >= 10 ? 'likes you' : op > -10 ? 'has no strong feelings about you' : op > -25 ? 'is cool toward you' : op > -45 ? 'distrusts you' : 'hates you';
+  const sign = Math.sign(op);
+  const mems = memoriesAbout(s, id, s.playerId).filter((m) => Math.sign(m.now) === sign && Math.abs(m.now) >= 2).sort((a, b) => Math.abs(b.now) - Math.abs(a.now));
+  const name = callName(c);
+  if (!mems.length || Math.abs(op) < 10) return `${name} ${verb}.`;
+  return `${name} ${verb} since ${youDid(mems[0].act)}.`;
+}
+
+/** "Prosecuted my kinsman" (his words about you) → "you prosecuted his kinsman". */
+export function youDid(act: string): string {
+  const father = act.startsWith('His father: ');
+  const body = father ? act.slice('His father: '.length) : act;
+  const swap: Record<string, string> = { me: 'him', my: 'his', i: 'he', myself: 'himself', his: 'your', him: 'you', himself: 'yourself', mine: 'his' };
+  const words = body.split(' ').map((w, i) => {
+    const m = /^([A-Za-z]+)(.*)$/.exec(w);
+    if (!m) return w;
+    const low = m[1].toLowerCase();
+    const r = swap[low] ?? (i === 0 ? low : m[1]);
+    return r + m[2];
+  });
+  return `${father ? 'your father' : 'you'} ${words.join(' ')}`;
+}
+
+export interface CircleEntry {
+  id: CharId;
+  role: string;
+  tone: Reason['tone'];
+  line: string;
+  weight: number;
+}
+
+/** The handful of people who matter to you now: family, patron, rivals, allies, anyone who wants something. */
+export function circle(s: GameState, max = 9): CircleEntry[] {
+  const me = s.chars[s.playerId];
+  const ids = new Set<CharId>();
+  const add = (id: CharId | null | undefined) => {
+    if (id && id !== me.id && s.chars[id]?.alive) ids.add(id);
+  };
+  add(me.patronId);
+  add(me.spouseId);
+  add(me.fatherId);
+  for (const c of allChars(s)) if (c.alive && (c.fatherId === me.id || (c.patronId === me.id && c.rank !== 'plebs'))) add(c.id);
+  for (const t of s.network.ties) if (t.a === me.id || t.b === me.id) add(t.a === me.id ? t.b : t.a);
+  for (const f of s.network.favors) if (f.creditor === me.id || f.debtor === me.id) add(f.creditor === me.id ? f.debtor : f.creditor);
+  for (const l of [...loansOwedBy(s, me.id), ...loansHeldBy(s, me.id)]) add(l.lender === me.id ? l.borrower : l.lender);
+  const pc = playerCase(s);
+  if (pc) [pc.defendant, pc.prosecutor, pc.defender].forEach(add);
+  const myE = electionOfCandidate(s, me.id);
+  if (myE) for (const c of myE.candidates) add(c.who);
+  for (const p of s.events.pending) Object.values(p.roles).forEach(add);
+  // And whoever has lately done something to you that he will remember.
+  for (const [owner, list] of Object.entries(s.network.memories)) if (list.some((m) => m.about === me.id && s.day - m.day < 120 && Math.abs(m.weight) >= 12)) add(owner);
+  const out: CircleEntry[] = [];
+  for (const id of ids) {
+    const why = whyMatters(s, id);
+    if (!why.length) continue;
+    const weight = why.reduce((a, r) => a + r.weight, 0) + Math.abs(opinion(s, id, me.id).total) / 20;
+    // The headline is the relationship; favors and debts are a note on the line.
+    const rel = why.find((r) => !/favor/.test(r.text)) ?? why[0];
+    const fav = why.find((r) => r !== rel && /favor/.test(r.text));
+    const line = stanceLine(s, id) + (fav ? ` ${fav.text.replace('Owes you', 'He owes you')}.` : '');
+    out.push({ id, role: rel.text, tone: rel.tone, line, weight });
+  }
+  // Family and patron first (at most four), then whoever weighs most.
+  const close = /^(Your (wife|father|mother|brother|son|daughter|heir|patron))/;
+  const first = out.filter((e) => close.test(e.role)).sort((a, b) => b.weight - a.weight).slice(0, 4);
+  const rest = out.filter((e) => !first.includes(e)).sort((a, b) => b.weight - a.weight);
+  return [...first, ...rest].slice(0, max);
 }
 
 export function relevance(s: GameState, id: CharId): number {

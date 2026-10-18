@@ -34,10 +34,8 @@ export function CityMap({ s, selected, onSelect, version }: Props) {
         return;
       }
       host.current?.appendChild(app.canvas);
-      app.canvas.style.height = '46vh';
-      app.canvas.style.width = 'auto';
-      app.canvas.style.maxWidth = '100%';
-      app.canvas.style.margin = '0 auto';
+      app.canvas.style.width = '100%';
+      app.canvas.style.height = '100%';
       const river = new Graphics();
       river.moveTo(TIBER[0], TIBER[1]);
       for (let i = 2; i < TIBER.length; i += 2) river.lineTo(TIBER[i], TIBER[i + 1]);
@@ -138,5 +136,5 @@ export function CityMap({ s, selected, onSelect, version }: Props) {
     appRef.current?.draw(s, selected);
   }, [s, selected, version]);
 
-  return <div ref={host} />;
+  return <div ref={host} style={{ position: 'absolute', inset: 0 }} />;
 }

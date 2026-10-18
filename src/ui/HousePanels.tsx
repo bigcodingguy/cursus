@@ -48,7 +48,7 @@ export function FamilyPanel({ s }: { s: GameState }) {
       <h3>Wife</h3>
       {wife ? (
         <div className="small">
-          <Name s={s} id={wife.id} full />, {ageOf(s, wife)}.{m?.dowry ? ` Her dowry was ${fmtHS(m.dowry)}; it goes back to her family if you divorce.` : ''}
+          <Name s={s} id={wife.id} full />.{m?.dowry ? ` Her dowry was ${fmtHS(m.dowry)}; it goes back to her family if you divorce.` : ''}
         </div>
       ) : (
         <div className="small muted">{marriageable(s, me) ? 'Unmarried. A wife brings a dowry and her family as your kin.' : 'Too young to marry (18).'}</div>
