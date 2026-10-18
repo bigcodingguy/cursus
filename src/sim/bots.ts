@@ -87,7 +87,7 @@ export const STRATEGIES: Record<StrategyId, Strategy> = {
     id: 'establishment',
     label: 'Establishment climber (the boni)',
     routine: 'attend',
-    prefs: { intro: ['Nasica'], octavius_veto: ['sacred'], octavius_deposed: ['Vote against'], capitol: ['Go with the senators', 'Get off'], scipio_italians: ['Scipio is right'], scipio_death: ['Keep'], gaius_laws: ['Join those'], aventine: ['Arm yourself'], creditor_warning: ['Drop'], creditor_warning_own: ['Drop'], asked_to_defend: ['Accept'], father_loan_called: ['drop the case'] },
+    prefs: { opp_sententia: ['Speak for a hard line'],  intro: ['Nasica'], octavius_veto: ['sacred'], octavius_deposed: ['Vote against'], capitol: ['Go with the senators', 'Get off'], scipio_italians: ['Scipio is right'], scipio_death: ['Keep'], gaius_laws: ['Join those'], aventine: ['Arm yourself'], creditor_warning: ['Drop'], creditor_warning_own: ['Drop'], asked_to_defend: ['Accept'], father_loan_called: ['drop the case'] },
     stance: (_s, popular) => (popular === 'for' ? 'against' : 'for'),
     speakEvery: 30,
     prosecuteFromAge: 99,

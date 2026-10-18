@@ -205,7 +205,7 @@ function verdict(s: GameState, c: Case) {
     emit(s, 'charFlag', { who: pros.id, key: 'convictions', value: prior + 1 });
     emit(s, 'standing', { who: pros.id, kind: 'dignitas', value: prior === 0 ? 7 : prior < 2 ? 2 : 0.5, label: `Convicted ${shortName(def)} of ${what}`, halfLife: 0 });
     emit(s, 'standing', { who: pros.id, kind: 'people', value: 12, label: 'Won a famous prosecution' });
-    if (def.lean > 0.3) emit(s, 'standing', { who: pros.id, kind: 'boni', value: -4, label: 'Brought down one of the boni' });
+    if (def.lean > 0.3) emit(s, 'standing', { who: pros.id, kind: 'boni', value: -6, label: 'Brought down one of the boni', halfLife: 3000 });
     emit(s, 'memory', { owner: def.id, about: pros.id, act: 'Had me convicted', weight: -30, halfLife: 0 });
     if (defender) emit(s, 'standing', { who: defender.id, kind: 'dignitas', value: -2, label: 'Lost a defense', halfLife: 1500 });
     const exile = paid < owed || chance(s.rng, c.charge === 'ambitus' ? 0.2 : 0.4);
