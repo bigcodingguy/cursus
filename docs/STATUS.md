@@ -1,6 +1,6 @@
 # Status
 
-_Updated 2026-10-18 — Phase 3a (a full life) done and deployed; 3b waits for Blake’s go._
+_Updated 2026-10-18 — Blake’s new priorities: stage 1 (critical fixes) deployed; stage 2 (people-first redesign) next; stage 3 (art) needs network access. Phase 3b as scoped is dropped._
 
 ## Where things stand
 
@@ -39,6 +39,11 @@ Acceptance moments verified (in bot runs and in my own UI playthrough):
 - **Person panel** for yourself: how Rome sees you, ambitions, family (father’s health, debts, letters), what men lately remember of you.
 - **Mortality** age-weighted with varied causes.
 
+## Stage 1 — critical fixes (2026-10-18)
+- **Saves no longer fail.** Saves are gzip-compressed and kept in IndexedDB (localStorage only as a fallback; old saves move over on first load). A 100 BC save is ~320 KB stored, so the three slots and the autosave fit many times over. Saves queue one after another, and any failure — autosave included — shows a message. The sim also archives as it goes: old elections keep only winners and tallies, closed cases go after three years, faded memories and standings lapse, and long-dead minor men keep only their names and family links. Tested: a 100 BC save round-trips exactly and four fit in well under 2.5 MB; in the browser four slots were written, the page reloaded, and Continue restored the game.
+- **Fewer, better prompts.** Errands, sneers, quarrels, dinner invitations and junior counsel are for young men only; senators get senatorial business instead (your opinion asked in the Senate, a town asking you to be its patron, a young man asking to be your client, an embassy). Cooldowns are now 300–1000 days, the quiet spell before an offer grows with rank, and events you haven’t seen lately are preferred.
+- **Balance.** Popular laws now pass when the people want them (the Mamilian court passes in 66% of runs, up from 21%), and vetoing a popular bill costs the tribune heavily. Favors cap at 5 per pair and lapse after eight years. A man of 30+ with no heir is offered a friend’s younger son to adopt. The consulship: see Known issues.
+
 ## Phase 3a — a full life (2026-10-18)
 Authorized by Blake without playing first. The game now runs from 133 BC to the end of **100 BC**.
 - **Family and dynasty.** Marry (the bride’s guardian weighs your standing; a dowry comes with her and her family becomes your kin), divorce (dowry returned), adopt (a younger son of a house with sons to spare takes your name). Children are born to married couples and can die young; women can die in childbirth. Everyone ages and dies of age-weighted causes. Name your heir in the **Family** tab; on death you continue as him with the house’s money, debts, loans, favors, friendships and enmities, and men remember the father in the son. Each death of the line writes a Scipionic-style **elogium** in the tomb. A consulship puts a mask in the atrium and makes the house noble. Exile hands the house to a grown son. NPC houses marry, breed and adopt by the same actions.
@@ -59,6 +64,8 @@ Authorized by Blake without playing first. The game now runs from 133 BC to the 
 - CI (`.github/workflows/ci.yml`) runs on every push.
 
 ## Known issues / rough edges
+- The consulship is still inverted in bot runs after stage 1 (orator 31%, establishment 15%; target the reverse). A stronger new-man handicap tempered by the boni’s favor is being tuned in stage 2.
+- Family extinction is still ~22% in bot runs: most of it is men dying young before they marry; the adoption offer helps only from 30.
 - Placeholder art throughout (by design until Phase 4).
 - Bots default on a loan at least once in roughly a third of 33-year runs (they borrow whenever short and own no land to sell); real players can avoid it, but debt is harsher over a long career than in the slice.
 - Moments in 200-run bot samples: 3 (games debt, an unnamed vote) ~77%, 5 (late letter) ~65%, 10 (consul in the family) 10–50% by strategy; 6 (daughter’s suitors) ~1% — a daughter must come of age before 100 BC; 8 (client tribune vetoes your law) 0% in bot runs because bots almost never carry laws — it is covered by a test and can happen in play.
