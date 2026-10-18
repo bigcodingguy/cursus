@@ -61,10 +61,10 @@ Authorized by Blake without playing first. The game now runs from 133 BC to the 
 ## Known issues / rough edges
 - Placeholder art throughout (by design until Phase 4).
 - Bots default on a loan at least once in roughly a third of 33-year runs (they borrow whenever short and own no land to sell); real players can avoid it, but debt is harsher over a long career than in the slice.
-- Some moments are rare in bot runs: the daughter’s suitors (a daughter must come of age before 100 BC) and the client tribune’s veto (your client must be tribune while you carry a law). They can happen; bots don’t chase them.
+- Moments in 200-run bot samples: 3 (games debt, an unnamed vote) ~77%, 5 (late letter) ~65%, 10 (consul in the family) 10–50% by strategy; 6 (daughter’s suitors) ~1% — a daughter must come of age before 100 BC; 8 (client tribune vetoes your law) 0% in bot runs because bots almost never carry laws — it is covered by a test and can happen in play.
 - Bots rarely carry laws; NPC magistrates do, and many popular bills die by veto. The Mamilian court passes in about a quarter of runs, and with it the condemnations of Bestia, Albinus and Opimius.
 - The heir is named in advance (Family tab), not chosen at the deathbed. Recall from exile is not modelled. Daughters can only be married through the suitors event, not by your own proposal.
-- History diverges: Marius’s run of consulships and the Cimbric victories need him elected; when he isn’t, the Cimbri stay a threat to 100 BC.
+- History diverges a lot after 110 BC: the Gracchan arc fires in ~80% of runs, but Marius reaches his consulships in only about a quarter to a third (the head count 29%, Jugurtha captured 19%, Vercellae 24%); when he isn’t elected the Cimbri stay a threat to 100 BC. Saturninus dies on the Curia roof in ~48%.
 
 ## Next (Phase 3b, after Blake says go)
 The Mediterranean map; the crisis clock into the 80s BC (Social War, Sulla, proscriptions); the 122 BC jury shift as a lasting equites-vs-Senate fault line.
