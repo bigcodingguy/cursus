@@ -38,7 +38,7 @@ export const CAREER_EVENTS: EventDef[] = [
     when: { all: [{ charFlag: 'player', key: 'gamesDebt' }, { inRome: 'player' }, { exists: 'eques' }] },
     hazard: 0.03,
     player: true,
-    roles: { eques: { pick: { select: 'adultMen', where: { all: [{ not: { senator: 'it' } }, { num: { cash: 'it' }, gte: 400000 }, { not: { charFlag: 'it', key: 'banker' } }] }, inRome: true }, best: { cash: 'it' } } },
+    roles: { eques: { pick: { select: 'adultMen', where: { all: [{ not: { senator: 'it' } }, { num: { cash: 'it' }, gte: 200000 }, { not: { charFlag: 'it', key: 'banker' } }] }, inRome: true }, best: { cash: 'it' } } },
     text: [
       '{eques}, who holds shares in half the tax contracts in Asia, comes to see you without his usual crowd of freedmen. He has heard about your debts. Everyone has.',
       '“I will lend you HS 350,000 without interest, for as long as you like. I ask one thing. Some day there will be a vote that matters to men like me. When it comes, I will send to you, and you will speak and vote as I ask. Just once. I will not tell you now what it is.”',

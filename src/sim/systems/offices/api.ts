@@ -53,7 +53,6 @@ export function ineligibleFor(s: GameState, c: Character, office: OfficeId, forY
     case 'tribune_pleb':
       if (fam?.patrician) return 'A patrician cannot be tribune of the plebs';
       if (c.servedAbroad < 1) return 'Must first have served at least one campaign abroad';
-      if (recs.some((r) => r.office === 'tribune_pleb' && r.yearBC === forYearBC + 1)) return 'No man may hold the tribunate two years running';
       return null;
     case 'aedile':
       if (!heldAny(s, c.id, 'quaestor')) return 'Must have been quaestor';
@@ -116,19 +115,32 @@ export function assemblyOf(office: OfficeId): 'tribal' | 'centuriate' {
 }
 
 /** History's expectation: men the fasti name for this office and year carry the city's assumption with them. */
-/** History marks this man for this office about now (within two years of the recorded year), and he has not had it yet. */
+export const fastiList = (y: number, office: OfficeId) => {
+  const f = FASTI[y];
+  if (!f) return undefined;
+  return office === 'consul' ? f.consuls : office === 'tribune_pleb' ? f.tribunes : office === 'praetor' ? f.praetors : office === 'quaestor' ? f.quaestors : undefined;
+};
+
+/** History marks this man for this office in a later year, and he has not had it: he waits for his year. */
+export function waitsForHisYear(c: Character, office: OfficeId, forYearBC: number): boolean {
+  if (!c.historical) return false;
+  for (let y = forYearBC - 1; y >= Math.max(100, forYearBC - 8); y--) if (fastiList(y, office)?.includes(c.historical)) return forYearBC > 120 || forYearBC - y > 2;
+  return false;
+}
+
+/** History marks this man for this office now. Up to 120 BC the record is exact; after it, within two years of the
+ *  recorded year (a man listed more than once, like Marius, keeps to his years), provided he has not had it yet. */
 export function expectedBy(s: GameState, c: Character, office: OfficeId, forYearBC: number): boolean {
   if (!c.historical) return false;
-  for (let y = forYearBC + 2; y >= forYearBC - 2; y--) {
-    const f = FASTI[y];
-    if (!f) continue;
-    const list = office === 'consul' ? f.consuls : office === 'tribune_pleb' ? f.tribunes : office === 'praetor' ? f.praetors : office === 'quaestor' ? f.quaestors : undefined;
-    if (!list?.includes(c.historical)) continue;
-    // Already held it in that window (a man listed for several consulships counts each one).
-    const held = s.offices.records.some((r) => r.who === c.id && r.office === office && Math.abs(r.yearBC - y) <= 2 && r.yearBC !== forYearBC && (office !== 'consul' || r.yearBC === y));
-    if (!held) return true;
-  }
-  return false;
+  const key = c.historical;
+  if (fastiList(forYearBC, office)?.includes(key)) return true;
+  if (forYearBC >= 120) return false;
+  const listed: number[] = [];
+  for (let y = 119; y >= 100; y--) if (fastiList(y, office)?.includes(key)) listed.push(y);
+  if (listed.length !== 1) return false;
+  const y = listed[0];
+  if (Math.abs(y - forYearBC) > 2) return false;
+  return !s.offices.records.some((r) => r.who === c.id && r.office === office && Math.abs(r.yearBC - y) <= 2);
 }
 
 // ---------------- the vote ----------------
@@ -160,6 +172,8 @@ export interface Profile {
   endorsers: { tribe: string; dig: number }[];
   expected: boolean;
   assembly: 'tribal' | 'centuriate';
+  /** Standing for the consulship with no consul among his ancestors. */
+  newMan?: boolean;
 }
 
 export function profileOf(s: GameState, cand: Candidate, e?: Election): Profile {
@@ -175,6 +189,7 @@ export function profileOf(s: GameState, cand: Candidate, e?: Election): Profile 
     endorsers: cand.endorsements.filter((x) => s.chars[x]?.alive).map((x) => ({ tribe: s.chars[x].tribe, dig: standingOf(s, x, 'dignitas').total })),
     expected: !!e && expectedBy(s, c, e.office, e.forYearBC),
     assembly: e ? assemblyOf(e.office) : 'tribal',
+    newMan: e?.office === 'consul' && !(c.familyId && (s.families[c.familyId]?.consulAncestors ?? 0) > 0),
   };
 }
 
@@ -213,6 +228,8 @@ export function appealParts(p: Profile, unit: string | Unit): { label: string; v
     if (endorse) parts.push({ label: 'Endorsements', value: Math.min(1, endorse) });
   }
   if (p.expected) parts.push({ label: 'Everyone expects him to win', value: 2.0 });
+  // The nobles guard the consulship: the centuries of the rich do not lightly elect a man without consular ancestors.
+  if (p.newMan) parts.push({ label: 'A new man: no consul among his ancestors', value: -1.6 * u.wealth });
   return parts;
 }
 

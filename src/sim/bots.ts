@@ -199,7 +199,7 @@ function decide(s: GameState, st: Strategy): void {
   const want = (side: number) => (st.id === 'populist' ? -side : st.id === 'establishment' ? side : 0.3 - Math.abs(side));
   if (!canPropose(s, me)) {
     const law = availableLaws(s).sort((a, b) => want(b.side) + b.appeal - (want(a.side) + a.appeal))[0];
-    if (law && want(law.side) + law.appeal > 0.9 && act(s, 'propose_law', { law: law.id })) return;
+    if (law && want(law.side) + law.appeal > 0.6 && act(s, 'propose_law', { law: law.id })) return;
   }
   for (const pr of pendingProposals(s)) {
     const law = lawDef(pr.law)!;

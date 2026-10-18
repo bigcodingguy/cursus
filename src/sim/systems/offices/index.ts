@@ -11,7 +11,7 @@ import type { Character, CharId, Election, GameState, OfficeId } from '../../typ
 import { allChars, ageOf, breakdown, byHistorical, clamp, fullName, shortName, yearBC } from '../../util';
 import { cashOf } from '../money/api';
 import { standingOf } from '../standing/api';
-import { assemblyOf, candidacyOf, heldEver, electionFor, electionOfCandidate, expectedBy, FORECAST_RUNS, forecastRuns, ineligibleFor, openElections, profiles, quaestorIneligible, voteOnce } from './api';
+import { assemblyOf, candidacyOf, heldEver, waitsForHisYear, electionFor, electionOfCandidate, expectedBy, FORECAST_RUNS, forecastRuns, ineligibleFor, openElections, profiles, quaestorIneligible, voteOnce } from './api';
 
 
 function record(s: GameState, who: CharId, office: OfficeId, y: number) {
@@ -79,8 +79,14 @@ function declare(s: GameState, who: CharId, office: OfficeId) {
 }
 
 /** How much a man wants an office this year. History's men want theirs badly. */
+const RANK: Partial<Record<OfficeId, number>> = { quaestor: 1, tribune_pleb: 1, aedile: 2, praetor: 3, consul: 4, censor: 5 };
+
 function urgeFor(s: GameState, a: Character, e: Election): number {
   if (expectedBy(s, a, e.office, e.forYearBC)) return 9;
+  // No man who has sat in a curule chair stands for a lower one.
+  const top = Math.max(0, ...s.offices.records.filter((r) => r.who === a.id).map((r) => RANK[r.office] ?? 0));
+  if (top > (RANK[e.office] ?? 0) && e.office !== 'consul') return 0;
+  if (waitsForHisYear(a, e.office, e.forYearBC)) return 0.2;
   const dig = standingOf(s, a.id, 'dignitas').total;
   const age = a.bornBC - e.forYearBC;
   switch (e.office) {
@@ -146,7 +152,7 @@ function draftField(s: GameState, e: Election) {
   const want = e.seats + (e.office === 'consul' || e.office === 'censor' ? 2 : 3);
   if (e.candidates.length >= want) return;
   const pool = allChars(s)
-    .filter((c) => c.id !== s.playerId && !candidacyOf(s, c.id) && !ineligibleFor(s, c, e.office, e.forYearBC))
+    .filter((c) => c.id !== s.playerId && !candidacyOf(s, c.id) && !ineligibleFor(s, c, e.office, e.forYearBC) && urgeFor(s, c, e) > 0.2)
     .sort((a, b) => standingOf(s, b.id, 'dignitas').total + b.traits.ambition * 20 - (standingOf(s, a.id, 'dignitas').total + a.traits.ambition * 20));
   for (const c of pool) {
     if (e.candidates.length >= want) break;
@@ -168,9 +174,9 @@ function resolveElection(s: GameState, e: Election, playerSaw?: number) {
   // Winners who bought their votes may find themselves in the bribery court.
   for (const w of r.winners) {
     const c = s.chars[w];
-    if ((c.flags.ambitus ?? 0) >= 15000) emit(s, 'hook', { name: 'ambitus_case', roles: { defendant: w }, vars: { amount: c.flags.ambitus, office: e.office } });
-    if (c.flags.ambitus) emit(s, 'charFlag', { who: w, key: 'ambitus', value: 0 });
+    if ((c.flags.ambitus ?? 0) >= 40000 && chance(s.rng, 0.5)) emit(s, 'hook', { name: 'ambitus_case', roles: { defendant: w }, vars: { amount: c.flags.ambitus, office: e.office } });
   }
+  for (const c of e.candidates) if (s.chars[c.who]?.flags.ambitus) emit(s, 'charFlag', { who: c.who, key: 'ambitus', value: 0 });
   const names = r.winners.map((w) => shortName(s.chars[w])).join(', ');
   const plural: Record<string, string> = { quaestor: 'quaestors', tribune_pleb: 'tribunes of the plebs', aedile: 'aediles', praetor: 'praetors', consul: 'consuls', censor: 'censors' };
   emit(s, 'log', { text: `The ${assemblyOf(e.office) === 'centuriate' ? 'centuries' : 'tribes'} elect the ${plural[e.office]} for ${e.forYearBC} BC: ${names}.`, kind: 'election', about: r.winners });
