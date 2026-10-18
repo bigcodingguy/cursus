@@ -36,9 +36,10 @@ export const CAREER_EVENTS: EventDef[] = [
   {
     id: 'eques_offer',
     title: 'An offer from the Carinae',
-    when: { all: [{ charFlag: 'player', key: 'gamesDebt' }, { inRome: 'player' }, { exists: 'eques' }] },
+    when: { all: [{ charFlag: 'player', key: 'gamesDebt' }, { inRome: 'player' }] },
     hazard: 0.03,
     player: true,
+    needs: ['eques'],
     roles: { eques: { pick: { select: 'adultMen', where: { all: [{ not: { senator: 'it' } }, { num: { cash: 'it' }, gte: 200000 }, { not: { charFlag: 'it', key: 'banker' } }, { num: { debtTo: ['player', 'it'] }, lte: 0 }] }, inRome: true }, best: { cash: 'it' } } },
     text: [
       '{eques}, who holds shares in half the tax contracts in Asia, comes to see you without his usual crowd of freedmen. He has heard about your debts. Everyone has.',

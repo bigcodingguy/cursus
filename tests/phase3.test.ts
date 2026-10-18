@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { emit } from '../src/sim/bus';
-import { command, tick } from '../src/sim/core';
+import { command, startAction, tick } from '../src/sim/core';
 import { newGame } from '../src/sim/setup';
 import { availableLaws, passChance, proposalOf } from '../src/sim/systems/assembly/api';
 import { heirOf } from '../src/sim/systems/family/api';
 import type { GameState } from '../src/sim/types';
-import { yearBC } from '../src/sim/util';
+import { ageOf, yearBC } from '../src/sim/util';
 
 function game(): GameState {
   return newGame({ seed: 4242, praenomen: 'Marcus', nomen: 'Gratidius' });
@@ -45,6 +45,29 @@ describe('laws before the people', () => {
       tick(s);
     }
     expect(p.status).not.toBe('pending');
+  });
+});
+
+describe('acceptance moment 8', () => {
+  it('a client the player made tribune can veto his law in public', () => {
+    const s = game();
+    const pl = s.chars[s.playerId];
+    pl.bornBC = 170;
+    s.day += 365 * 14;
+    s.events.pending = [];
+    const y = yearBC(s);
+    s.offices.records.push({ who: pl.id, office: 'tribune_pleb', yearBC: y });
+    const client = Object.values(s.chars).find((c) => c.alive && !c.female && c.id !== pl.id && c.location === 'rome' && ageOf(s, c) >= 30)!;
+    client.patronId = pl.id;
+    s.offices.records.push({ who: client.id, office: 'tribune_pleb', yearBC: y });
+    const law = availableLaws(s)[0];
+    expect(command(s, { type: 'act', action: 'propose_law', params: { law: law.id } })).toBeNull();
+    for (let i = 0; i < 3; i++) tick(s);
+    const p = proposalOf(s, pl.id)!;
+    expect(startAction(s, client.id, 'veto_law', { proposal: p.id })).toBeNull();
+    expect(p.status).toBe('vetoed');
+    tick(s);
+    expect(s.events.pending.some((x) => x.eventId === 'client_veto')).toBe(true);
   });
 });
 
