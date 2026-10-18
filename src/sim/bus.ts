@@ -21,7 +21,7 @@ export interface BusEvents {
   'trial.verdict': { caseId: string; verdict: 'convicted' | 'acquitted'; prosecutor: CharId; defender?: CharId; defendant: CharId };
   'trial.opened': { caseId: string; prosecutor: CharId; defendant: CharId };
   'election.held': { electionId: string; winners: CharId[] };
-  'election.postpone': { office: OfficeId; days: number; reason: string };
+  'election.postpone': { office: OfficeId | 'mine'; days: number; reason: string };
   'action.done': { actor: CharId; action: string };
   pressure: { id: string; add: number };
   stability: { add: number; label: string };
@@ -37,6 +37,10 @@ export interface BusEvents {
   flag: { key: string; value: number };
   'gossip.hear': Record<string, never>;
   occupy: { who: CharId; days: number };
+  marry: { husband: CharId; wife: CharId; dowry?: number };
+  divorce: { husband: CharId };
+  adopt: { father: CharId; son: CharId };
+  untie: { a: CharId; b: CharId; kind: 'amicus' | 'inimicus' | 'kin' };
   act: { who: CharId; action: string; params: Record<string, string | number> };
   charFlag: { who: CharId; key: string; value: number };
   patron: { client: CharId; patron: CharId | null };

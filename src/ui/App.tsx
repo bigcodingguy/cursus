@@ -35,7 +35,7 @@ function Title() {
     <div className="title-screen">
       <div className="title-card">
         <h1>CVRSVS</h1>
-        <div className="tag">A Roman life through the fall of the Republic · playable slice, 133–120 BC</div>
+        <div className="tag">A Roman life through the fall of the Republic · 133–100 BC</div>
         <p>
           Spring, 133 BC. You are sixteen, a <i>novus homo</i> from Arpinum, the son of a modestly wealthy equestrian. No man of your family has ever sat in the Senate. Win people — patrons, clients, friends, enemies — and climb.
         </p>
@@ -72,7 +72,7 @@ function Title() {
           <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const err = importSave(await f.text()); if (err) toast(err); } }} />
         </div>
         <p className="small muted" style={{ marginTop: '1rem' }}>
-          Placeholder art. Saves stay in this browser (and in files you download). The slice ends at the close of 120 BC.
+          Placeholder art. Saves stay in this browser (and in files you download). The game currently runs to the close of 100 BC.
         </p>
       </div>
     </div>

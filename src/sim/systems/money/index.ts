@@ -4,12 +4,9 @@ import type { SystemDef } from '../../core';
 import type { CharId, GameState } from '../../types';
 import { opinion } from '../network/api';
 import { cashOf, STANDARD_RATE } from './api';
+import { heirOf } from '../family/api';
 
-export function heirOf(s: GameState, id: CharId): CharId | undefined {
-  const sons = Object.values(s.chars).filter((c) => c.alive && c.fatherId === id && !c.female);
-  sons.sort((a, b) => b.bornBC - a.bornBC);
-  return sons[0]?.id;
-}
+export { heirOf };
 
 export const money: SystemDef = {
   id: 'money',

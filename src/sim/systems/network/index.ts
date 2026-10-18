@@ -2,6 +2,7 @@ import { on } from '../../bus';
 import type { SystemDef } from '../../core';
 import type { GameState } from '../../types';
 import { memoryValue } from './api';
+import { heirOf } from '../family/api';
 
 const MAX_MEMORIES = 60;
 
@@ -34,9 +35,34 @@ export const network: SystemDef = {
       if (!s.network.ties.some((x) => x.kind === e.kind && ((x.a === e.a && x.b === e.b) || (x.a === e.b && x.b === e.a))))
         s.network.ties.push({ a: e.a, b: e.b, kind: e.kind, since: s.day });
     });
+    on('untie', (s, e) => {
+      s.network.ties = s.network.ties.filter((x) => !(x.kind === e.kind && ((x.a === e.a && x.b === e.b) || (x.a === e.b && x.b === e.a))));
+    });
     on('death', (s, e) => {
-      // The dead owe nothing and are owed nothing (heirs come in Phase 3).
-      s.network.favors = s.network.favors.filter((f) => f.debtor !== e.who && f.creditor !== e.who);
+      // The heir takes on his father's favors, friendships and feuds, and men remember the father in the son.
+      const heir = heirOf(s, e.who);
+      if (heir) {
+        for (const f of s.network.favors) {
+          if (f.debtor === e.who) f.debtor = heir;
+          if (f.creditor === e.who) f.creditor = heir;
+        }
+        s.network.favors = s.network.favors.filter((f) => f.debtor !== f.creditor);
+        for (const t of s.network.ties) {
+          if (t.kind === 'kin') continue;
+          if (t.a === e.who) t.a = heir;
+          if (t.b === e.who) t.b = heir;
+        }
+        s.network.ties = s.network.ties.filter((t) => t.a !== t.b);
+        for (const [owner, list] of Object.entries(s.network.memories)) {
+          if (owner === heir) continue;
+          for (const m of [...list]) {
+            if (m.about !== e.who) continue;
+            const v = memoryValue(m, s.day);
+            if (Math.abs(v) < 3) continue;
+            list.push({ about: heir, act: `His father: ${m.act}`, day: s.day, weight: v * 0.5, halfLife: 3000 });
+          }
+        }
+      } else s.network.favors = s.network.favors.filter((f) => f.debtor !== e.who && f.creditor !== e.who);
       delete s.network.memories[e.who];
     });
   },

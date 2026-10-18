@@ -2,8 +2,9 @@
 
 import { EVENTS as HISTORY } from '../../../content/events';
 import { OPPORTUNITIES } from '../../../content/opportunities';
+import { FAMILY_EVENTS } from '../../../content/family';
 
-const EVENTS = [...HISTORY, ...OPPORTUNITIES];
+const EVENTS = [...HISTORY, ...OPPORTUNITIES, ...FAMILY_EVENTS];
 import { evalCond, evalNum, groupMembers, renderSegs, resolve, withRole, type Cond, type Effect, type Group, type NumExpr, type Ref, type Scope, type TextSeg } from '../../dsl';
 import type { Breakdown, CharId, GameState, PendingEvent } from '../../types';
 import { clamp } from '../../util';

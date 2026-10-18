@@ -44,6 +44,10 @@ export interface Character {
   home: PlaceId;
   tribe: string;
   fatherId?: CharId;
+  motherId?: CharId;
+  spouseId?: CharId;
+  /** Original family, for a man adopted into another. */
+  adoptedFrom?: string;
   patronId?: CharId | null;
   historical?: string;
   servedAbroad: number; // campaign seasons served
@@ -278,6 +282,28 @@ export interface NewsState {
   nextId: number;
 }
 
+// ---------------- family ----------------
+export interface Marriage {
+  husband: CharId;
+  wife: CharId;
+  day: number;
+  dowry: number;
+  ended?: number;
+}
+export interface Elogium {
+  who: CharId;
+  day: number;
+  lines: string[];
+}
+export interface FamilyState {
+  marriages: Marriage[];
+  /** Designated heir by testament, for any paterfamilias. */
+  heirs: Record<CharId, CharId>;
+  elogia: Elogium[];
+  /** Men of the player's line who have played, in order. */
+  line: CharId[];
+}
+
 // ---------------- log ----------------
 export interface LogEntry {
   day: number;
@@ -308,6 +334,7 @@ export interface GameState {
   crisis: CrisisState;
   events: EventsState;
   news: NewsState;
+  family: FamilyState;
   log: LogEntry[];
   pauseRequests: string[];
   ended?: { day: number; reason: string };

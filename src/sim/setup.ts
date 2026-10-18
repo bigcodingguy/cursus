@@ -17,7 +17,7 @@ export interface NewGameOptions {
 }
 
 export const START_DAY = dayOf(133, 2, 1); // Kalends of March, 133 BC
-export const END_DAY = dayOf(120, 11, 31) + 1;
+export const END_DAY = dayOf(100, 11, 31) + 1;
 
 function traits(r: RngState, over?: Partial<Traits>): Traits {
   const t = () => clamp(0.5 + 0.22 * gauss(r), 0, 1);
@@ -47,6 +47,7 @@ export function emptyState(seed: number): GameState {
     crisis: { pressures: {}, stability: 60, history: [] },
     events: { fired: {}, pending: [], nextUid: 1, scheduled: [], lastPrompt: START_DAY },
     news: { items: [], nextId: 1 },
+    family: { marriages: [], heirs: {}, elogia: [], line: [] },
     log: [],
     pauseRequests: [],
   };
@@ -164,6 +165,46 @@ export function newGame(opts: NewGameOptions): GameState {
   s.playerId = pl.id;
   const aufidius = byHistorical(s, 'aufidius')!;
   emit(s, 'loan.make', { lender: aufidius.id, borrower: father.id, amount: 150000, months: 24, monthlyRate: 0.01, preexisting: true });
+
+  // Wives and daughters. Marriages in place in 133 BC are recorded without moving money now.
+  const wed = (h: Character, w: Character, day = s.day - 365 * 5) => {
+    h.spouseId = w.id;
+    w.spouseId = h.id;
+    s.family.marriages.push({ husband: h.id, wife: w.id, day, dowry: 0 });
+  };
+  const wedKeys = (a: string, b: string) => {
+    const x = byHistorical(s, a);
+    const y = byHistorical(s, b);
+    if (x && y && !x.spouseId && !y.spouseId) wed(x, y);
+  };
+  wedKeys('ti_gracchus', 'claudia');
+  wedKeys('aemilianus', 'sempronia');
+  const houseNomina = HOUSES.map((h) => h.nomen);
+  for (const c of Object.values(s.chars)) {
+    if (c.female || c.spouseId || c.bornBC - 133 < 28 || c.rank === 'plebs' || c.id === pl.id || c.flags.banker) continue;
+    if (!c.familyId || c.familyId === famId) continue;
+    if (rand(r) < 0.25) continue; // widowers and bachelors
+    const nomen = pick(r, houseNomina.filter((n) => n !== c.nomen));
+    const house = HOUSES.find((h) => h.nomen === nomen)!;
+    const w = add(
+      { praenomen: '', nomen: nomen.replace(/us$/, 'a'), female: true, familyId: house.id, bornBC: c.bornBC - randInt(r, 5, 15), rank: c.rank, traits: traits(r), lean: c.lean, oratory: 10, law: 5, location: 'rome', home: c.home, tribe: c.tribe, bio: `Wife of ${[c.praenomen, c.nomen, c.cognomen].filter(Boolean).join(' ')}.` },
+      0, 0, 0,
+    );
+    wed(c, w);
+    // A daughter or two, for the marriages of the next twenty years.
+    const n = randInt(r, 0, 2);
+    for (let i = 0; i < n; i++) {
+      const born = Math.min(w.bornBC - 16, 133 + randInt(r, 0, 18));
+      if (born < 133) continue;
+      add(
+        { praenomen: '', nomen: c.nomen.replace(/us$/, 'a'), cognomen: ['Maior', 'Minor', 'Tertia'][i], female: true, familyId: c.familyId, bornBC: born, rank: c.rank, traits: traits(r), lean: c.lean, oratory: 5, law: 0, location: 'rome', home: c.home, tribe: c.tribe, fatherId: c.id, motherId: w.id, bio: `Daughter of ${[c.praenomen, c.nomen, c.cognomen].filter(Boolean).join(' ')}.` },
+        0, 0, 0,
+      );
+    }
+  }
+  const mother = Object.values(s.chars).find((c) => c.female && c.familyId === famId)!;
+  wed(father, mother, s.day - 365 * 18);
+  pl.motherId = mother.id;
 
   // Ties already in place in 133 BC.
   const tie = (a: string, b: string, kind: 'amicus' | 'inimicus' | 'kin') => {

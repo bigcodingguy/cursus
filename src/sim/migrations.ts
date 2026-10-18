@@ -1,6 +1,6 @@
 // Save-format migrations. Bump CURRENT_VERSION and add a step whenever the state shape changes.
 
-export const CURRENT_VERSION = 2;
+export const CURRENT_VERSION = 3;
 
 type Migration = (state: Record<string, unknown>) => Record<string, unknown>;
 
@@ -10,6 +10,11 @@ export const migrations: Record<number, Migration> = {
   1: (s) => {
     const ev = s.events as Record<string, unknown>;
     ev.lastPrompt = s.day;
+    return s;
+  },
+  // v3: family and dynasty.
+  2: (s) => {
+    s.family = { marriages: [], heirs: {}, elogia: [], line: [s.playerId] };
     return s;
   },
 };

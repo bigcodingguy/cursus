@@ -9,7 +9,7 @@ import { visibleChoices } from './systems/events/api';
 import { cashOf, debtOf } from './systems/money/api';
 import { opinion } from './systems/network/api';
 import { campaignOpen } from './systems/offices';
-import { candidacyOf, heldEver, openElection, quaestorIneligible } from './systems/offices/api';
+import { candidacyOf, heldEver, ineligibleFor, openElections } from './systems/offices/api';
 import { standingOf } from './systems/standing/api';
 import { availableIssues, bankers, creditLimit } from './systems/city';
 import { clientsOf } from './systems/news';
@@ -148,9 +148,13 @@ function decide(s: GameState, st: Strategy): void {
   }
 
   // Elections.
-  const e = openElection(s);
-  if (e && !candidacyOf(s, me.id) && !quaestorIneligible(s, me, e.forYearBC) && s.day <= e.professioDeadline) {
-    if (act(s, 'declare')) return;
+  // Stand for the highest office open to you (populists like the tribunate).
+  if (!candidacyOf(s, me.id)) {
+    const order = st.id === 'populist' ? ['censor', 'consul', 'praetor', 'tribune_pleb', 'aedile', 'quaestor'] : ['censor', 'consul', 'praetor', 'aedile', 'tribune_pleb', 'quaestor'];
+    for (const office of order) {
+      const e = openElections(s).find((x) => x.office === office);
+      if (e && s.day <= e.professioDeadline && !ineligibleFor(s, me, e.office, e.forYearBC) && act(s, 'declare', { office })) return;
+    }
   }
   if (candidacyOf(s, me.id)) {
     const cand = candidacyOf(s, me.id)!;

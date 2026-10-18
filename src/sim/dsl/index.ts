@@ -30,6 +30,7 @@ export type NumExpr =
   | { oratory: Ref }
   | { served: Ref }
   | { law: Ref }
+  | { ancestors: Ref }
   | { cash: Ref }
   | { var: string }
   | { election: 'daysLeft' | 'postponements' | 'chance' | 'gap' }
@@ -95,9 +96,10 @@ export type Effect =
   | { travel: Ref; to: 'rome' | 'abroad' | 'arpinum' | 'exile'; days?: number }
   | { favor: { debtor: Ref; creditor: Ref; weight: number; reason: string } }
   | { tie: { a: Ref; b: Ref; kind: 'amicus' | 'inimicus' | 'kin' } }
-  | { postpone: { office: OfficeId; days: number; reason: string } }
+  | { postpone: { office: OfficeId | 'mine'; days: number; reason: string } }
   | { signal: string }
   | { occupy: Ref; days: number }
+  | { marry: [Ref, Ref] } // [husband, wife]
   | { lend: { lender: Ref; borrower: Ref; amount: NumExpr; months: number; monthlyRate?: number } }
   /** Start an action for a character; string params of the form 'var:x' read event variables. */
   | { act: string; who?: Ref; params?: Record<string, string | number> }
@@ -121,6 +123,8 @@ export function resolve(s: GameState, ref: Ref, sc: Scope): Character | undefine
     if (!c) return undefined;
     if (r === 'patron') c = ch(s, c.patronId);
     else if (r === 'father') c = ch(s, c.fatherId);
+    else if (r === 'mother') c = ch(s, c.motherId);
+    else if (r === 'spouse') c = c.spouseId && s.chars[c.spouseId]?.alive ? s.chars[c.spouseId] : undefined;
     else return undefined;
   }
   return c;
@@ -180,6 +184,11 @@ export function evalNum(s: GameState, e: NumExpr, sc: Scope): Breakdown {
     return one(e.standing[1], c ? standingOf(s, c.id, e.standing[1]).total : 0);
   }
   if ('oratory' in e) return one('Oratory', resolve(s, e.oratory, sc)?.oratory ?? 0);
+  if ('ancestors' in e) {
+    const c = resolve(s, e.ancestors, sc);
+    const f = c?.familyId ? s.families[c.familyId] : undefined;
+    return one('Consuls among his ancestors', f?.consulAncestors ?? 0);
+  }
   if ('law' in e) return one('Knowledge of the law', resolve(s, e.law, sc)?.law ?? 0);
   if ('served' in e) return one('Campaigns served', resolve(s, e.served, sc)?.servedAbroad ?? 0);
   if ('cash' in e) {
@@ -381,6 +390,12 @@ function applyEffect(s: GameState, e: Effect, sc: Scope): void {
     const b = idOf(s, e.lend.borrower, sc);
     const amount = Math.round(evalNum(s, e.lend.amount, sc).total);
     if (l && b && amount > 0) emit(s, 'loan.make', { lender: l, borrower: b, amount, months: e.lend.months, monthlyRate: e.lend.monthlyRate });
+    return;
+  }
+  if ('marry' in e) {
+    const h = idOf(s, e.marry[0], sc);
+    const w = idOf(s, e.marry[1], sc);
+    if (h && w) emit(s, 'marry', { husband: h, wife: w });
     return;
   }
   if ('occupy' in e) {

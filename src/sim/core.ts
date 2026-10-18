@@ -162,7 +162,7 @@ export function tick(s: GameState): boolean {
   if (d.dom === 1) for (const sys of systems) sys.monthly?.(s);
   for (const sys of systems) sys.daily?.(s);
   if (s.day >= s.endDay && !s.ended) {
-    s.ended = { day: s.day, reason: 'The slice ends at the close of 120 BC.' };
+    s.ended = { day: s.day, reason: 'This part of the story ends at the close of 100 BC.' };
     emit(s, 'pause', { reason: 'end' });
   }
   return true;

@@ -1,6 +1,6 @@
-// Offices: the annual magistrates, governors abroad, military service, and the quaestorian election.
+// Offices: the annual magistrates and their elections, governors abroad, military service.
 
-import { CAMPAIGNS, CANVASS_ZONES, FASTI, HISTORICAL_GOVERNORS, OFFICES, PROVINCES, QUAESTOR_ELECTION, type CanvassZone } from '../../../content/offices';
+import { CAMPAIGNS, CANVASS_ZONES, ELECTION_DEFS, FASTI, HISTORICAL_GOVERNORS, OFFICES, PROVINCES, QUAESTOR_ELECTION, type CanvassZone, type ElectionDef } from '../../../content/offices';
 import { OUTSIDE_NOMINA, PRAENOMINA } from '../../../content/cast';
 import { TRIBES } from '../../../content/offices';
 import { emit, on } from '../../bus';
@@ -11,7 +11,7 @@ import type { Character, CharId, Election, GameState, OfficeId } from '../../typ
 import { ageOf, byHistorical, clamp, fullName, shortName, yearBC } from '../../util';
 import { cashOf } from '../money/api';
 import { standingOf } from '../standing/api';
-import { candidacyOf, FORECAST_RUNS, forecastRuns, heldEver, openElection, profiles, quaestorIneligible, voteOnce } from './api';
+import { assemblyOf, candidacyOf, electionFor, electionOfCandidate, expectedBy, FORECAST_RUNS, forecastRuns, ineligibleFor, openElections, profiles, quaestorIneligible, voteOnce } from './api';
 
 
 function record(s: GameState, who: CharId, office: OfficeId, y: number) {
@@ -53,33 +53,58 @@ function fillSeats(s: GameState, office: OfficeId, y: number, seats: number, pre
   for (const id of chosen) record(s, id, office, y);
 }
 
-function newElection(s: GameState): Election {
+function newElection(s: GameState, def: ElectionDef): Election {
   const y = yearBC(s);
+  const day = dayOf(y, def.month, def.dom);
   return {
-    id: `q${y - 1}`,
-    office: 'quaestor',
+    id: `${def.office}${y - 1}`,
+    office: def.office,
     forYearBC: y - 1,
-    seats: QUAESTOR_ELECTION.seats,
-    day: dayOf(y, QUAESTOR_ELECTION.month, QUAESTOR_ELECTION.dom),
-    professioDeadline: dayOf(y, QUAESTOR_ELECTION.month, QUAESTOR_ELECTION.dom) - QUAESTOR_ELECTION.professioDays,
+    seats: def.seats,
+    day,
+    professioDeadline: day - QUAESTOR_ELECTION.professioDays,
     candidates: [],
     status: 'open',
     postponements: 0,
   };
 }
 
-function declare(s: GameState, who: CharId) {
-  const e = openElection(s);
-  if (!e || e.candidates.some((c) => c.who === who)) return;
+function declare(s: GameState, who: CharId, office: OfficeId) {
+  const e = electionFor(s, office);
+  if (!e || e.candidates.some((c) => c.who === who) || candidacyOf(s, who)) return;
   const groundwork = s.offices.groundwork[who] ?? {};
   e.candidates.push({ who, canvass: { ...groundwork }, bribes: {}, endorsements: [], declaredDay: s.day });
   delete s.offices.groundwork[who];
-  if (who === s.playerId) emit(s, 'log', { text: 'You give your name to the consul as a candidate for the quaestorship.', kind: 'player' });
+  if (who === s.playerId) emit(s, 'log', { text: `You give your name to the presiding consul as a candidate for ${OFFICES[office].label.toLowerCase()}.`, kind: 'player' });
+}
+
+/** How much a man wants an office this year. History's men want theirs badly. */
+function urgeFor(s: GameState, a: Character, e: Election): number {
+  if (expectedBy(a, e.office, e.forYearBC)) return 9;
+  const dig = standingOf(s, a.id, 'dignitas').total;
+  const age = a.bornBC - e.forYearBC;
+  switch (e.office) {
+    case 'quaestor':
+      return a.traits.ambition * (age >= 30 ? 1.5 : 1) + (a.historical ? 0.3 : 0) + 0.002 * dig;
+    case 'tribune_pleb':
+      return Math.abs(a.lean) > 0.4 ? a.traits.boldness * 0.9 + a.traits.ambition * 0.3 : 0.2;
+    case 'aedile':
+      return cashOf(s, a.id) > 60000 ? a.traits.ambition * 0.8 : 0.2;
+    case 'praetor':
+      return a.traits.ambition * 1.1 + dig / 120;
+    case 'consul':
+      return a.traits.ambition * 1.1 + dig / 90;
+    case 'censor':
+      return dig / 70;
+    default:
+      return 0;
+  }
 }
 
 /** Men from houses outside the cast who come forward. They join the cast and play by its rules. */
 function spawnOutsiders(s: GameState, e: Election) {
-  const [lo, hi] = QUAESTOR_ELECTION.fieldMargin;
+  if (e.office !== 'quaestor' && e.office !== 'tribune_pleb') return draftField(s, e);
+  const [lo, hi] = e.office === 'quaestor' ? QUAESTOR_ELECTION.fieldMargin : [3, 5];
   const want = e.seats + randInt(s.rng, lo, hi);
   let n = 0;
   while (e.candidates.length < want && n++ < 20) {
@@ -94,7 +119,7 @@ function spawnOutsiders(s: GameState, e: Election) {
     const anc = randInt(s.rng, 0, 3);
     const famId = `out_${id}`;
     s.families[famId] = { id: famId, name: nomenFull[0], patrician: false, consulAncestors: anc, praetorAncestors: randInt(s.rng, 0, 2), home: 'carinae' };
-    const bornBC = e.forYearBC + randInt(s.rng, 27, 33);
+    const bornBC = e.forYearBC + randInt(s.rng, 27, e.office === 'quaestor' ? 33 : 38);
     const c: Character = {
       id, praenomen, nomen: nomenFull[0], cognomen: nomenFull[1], female: false, familyId: famId, bornBC, alive: true,
       rank: 'eques', traits: { ambition: 0.6 + 0.4 * rand(s.rng), greed: rand(s.rng), boldness: rand(s.rng), loyalty: rand(s.rng), sociability: rand(s.rng), pride: rand(s.rng) },
@@ -111,7 +136,20 @@ function spawnOutsiders(s: GameState, e: Election) {
     const groundwork: Record<string, number> = {};
     for (const t of TRIBES) if (chance(s.rng, 0.6)) groundwork[t] = Math.round(rand(s.rng) * 6 * 10) / 10;
     s.offices.groundwork[id] = groundwork;
-    declare(s, id);
+    declare(s, id, e.office);
+  }
+}
+
+/** For the senior offices the field comes from the cast: eligible men are pressed by their friends to stand. */
+function draftField(s: GameState, e: Election) {
+  const want = e.seats + (e.office === 'consul' || e.office === 'censor' ? 2 : 3);
+  if (e.candidates.length >= want) return;
+  const pool = Object.values(s.chars)
+    .filter((c) => c.id !== s.playerId && !candidacyOf(s, c.id) && !ineligibleFor(s, c, e.office, e.forYearBC))
+    .sort((a, b) => standingOf(s, b.id, 'dignitas').total + b.traits.ambition * 20 - (standingOf(s, a.id, 'dignitas').total + a.traits.ambition * 20));
+  for (const c of pool) {
+    if (e.candidates.length >= want) break;
+    declare(s, c.id, e.office);
   }
 }
 
@@ -126,15 +164,23 @@ function resolveElection(s: GameState, e: Election, playerSaw?: number) {
   for (const c of e.candidates) {
     if (!r.winners.includes(c.who)) emit(s, 'standing', { who: c.who, kind: 'dignitas', value: -2, label: 'Defeated at the polls (repulsa)', halfLife: 1500 });
   }
+  // Winners who bought their votes may find themselves in the bribery court.
+  for (const w of r.winners) {
+    const c = s.chars[w];
+    if ((c.flags.ambitus ?? 0) >= 15000) emit(s, 'hook', { name: 'ambitus_case', roles: { defendant: w }, vars: { amount: c.flags.ambitus, office: e.office } });
+    if (c.flags.ambitus) emit(s, 'charFlag', { who: w, key: 'ambitus', value: 0 });
+  }
   const names = r.winners.map((w) => shortName(s.chars[w])).join(', ');
-  emit(s, 'log', { text: `The tribes elect the quaestors for ${e.forYearBC} BC: ${names}.`, kind: 'election', about: r.winners });
-  emit(s, 'news', { text: `The new quaestors are ${names}.`, truth: 'true', delay: 0, about: r.winners });
+  const plural: Record<string, string> = { quaestor: 'quaestors', tribune_pleb: 'tribunes of the plebs', aedile: 'aediles', praetor: 'praetors', consul: 'consuls', censor: 'censors' };
+  emit(s, 'log', { text: `The ${assemblyOf(e.office) === 'centuriate' ? 'centuries' : 'tribes'} elect the ${plural[e.office]} for ${e.forYearBC} BC: ${names}.`, kind: 'election', about: r.winners });
+  emit(s, 'news', { text: `The new ${plural[e.office]} are ${names}.`, truth: 'true', delay: 0, about: r.winners });
   emit(s, 'election.held', { electionId: e.id, winners: r.winners });
   const pc = e.candidates.find((c) => c.who === s.playerId);
   if (pc) {
     const won = r.winners.includes(s.playerId);
     const t = r.tally[s.playerId];
-    emit(s, 'event.trigger', { eventId: won ? 'election_won' : 'election_lost', vars: { tribes: t?.tribes ?? 0, votes: t?.votes ?? 0, year: e.forYearBC } });
+    const total = assemblyOf(e.office) === 'centuriate' ? 193 : 35;
+    emit(s, 'event.trigger', { eventId: won ? 'election_won' : 'election_lost', vars: { tribes: t?.tribes ?? 0, votes: t?.votes ?? 0, year: e.forYearBC, of: total, units: total === 193 ? 'centuries' : 'tribes', office: OFFICES[e.office].label.toLowerCase(), officeCap: OFFICES[e.office].label } });
   }
 }
 
@@ -148,8 +194,8 @@ export const offices: SystemDef = {
       emit(s, 'standing', { who: e.who, kind: 'dignitas', value: def.dignitas, label, halfLife: 0 });
     });
     on('election.postpone', (s, e) => {
-      const el = openElection(s);
-      if (!el || el.office !== e.office) return;
+      const el = e.office === 'mine' ? electionOfCandidate(s, s.playerId) : electionFor(s, e.office as OfficeId);
+      if (!el) return;
       el.day += e.days;
       el.postponements += 1;
       emit(s, 'log', { text: `The elections are postponed ${e.days} days: ${e.reason}.`, kind: 'election' });
@@ -159,7 +205,7 @@ export const offices: SystemDef = {
     });
 
     registerCommand('election.vote', (s) => {
-      const e = openElection(s);
+      const e = electionOfCandidate(s, s.playerId);
       if (!e || e.day > s.day) return 'No vote today';
       const runs = forecastRuns(s, e);
       const p = runs.filter((r) => r.winners.includes(s.playerId)).length / runs.length;
@@ -169,27 +215,30 @@ export const offices: SystemDef = {
 
     registerAction({
       id: 'declare',
-      label: 'Declare your candidacy for the quaestorship',
+      label: 'Declare your candidacy',
       blurb: 'Give your name to the presiding consul (professio). Canvassing done beforehand counts.',
       place: 'campus',
       duration: () => 0,
-      check: (s, a) => {
-        const e = openElection(s);
-        if (!e) return 'No election is open (candidacies open on the Kalends of Iunius)';
+      check: (s, a, p) => {
+        const office = (p.office as OfficeId) ?? 'quaestor';
+        const e = electionFor(s, office);
+        if (!e) return 'No election for that office is open (candidacies open on the Kalends of Iunius)';
         if (s.day > e.professioDeadline) return 'Too late to declare this year';
-        if (e.candidates.some((c) => c.who === a.id)) return 'Already a candidate';
-        return quaestorIneligible(s, a, e.forYearBC);
+        if (candidacyOf(s, a.id)) return 'Already a candidate this year';
+        return ineligibleFor(s, a, office, e.forYearBC);
       },
-      complete: (s, a) => declare(s, a.id),
+      complete: (s, a, p) => declare(s, a.id, (p.office as OfficeId) ?? 'quaestor'),
       npc: (s, a) => {
-        const e = openElection(s);
-        if (!e || a.id === s.playerId || s.day > e.professioDeadline || quaestorIneligible(s, a, e.forYearBC)) return [];
-        // Men history has marked for the tribunate that year keep themselves free for it.
-        if (a.historical && FASTI[e.forYearBC]?.tribunes?.includes(a.historical)) return [];
-        if (e.candidates.some((c) => c.who === a.id)) return [];
-        const age = a.bornBC - e.forYearBC;
-        const urge = a.traits.ambition * (age >= 30 ? 1.5 : 1) + (a.historical ? 0.3 : 0) + 0.002 * standingOf(s, a.id, 'dignitas').total;
-        return [{ params: {}, utility: urge > 0.7 ? 6 : 0.5 }];
+        if (a.id === s.playerId || candidacyOf(s, a.id)) return [];
+        const out = [];
+        for (const e of openElections(s)) {
+          if (s.day > e.professioDeadline || ineligibleFor(s, a, e.office, e.forYearBC)) continue;
+          // A man history marks for one office that year keeps himself free for it.
+          if (a.historical && !expectedBy(a, e.office, e.forYearBC) && (['consul', 'tribune_pleb', 'praetor'] as OfficeId[]).some((o) => expectedBy(a, o, e.forYearBC))) continue;
+          const urge = urgeFor(s, a, e);
+          out.push({ params: { office: e.office }, utility: urge > 0.75 ? 5 + Math.min(4, urge) : 0.5 });
+        }
+        return out;
       },
     });
 
@@ -202,10 +251,8 @@ export const offices: SystemDef = {
       cost: (_s, _a, p) => CANVASS_ZONES[(p.zone as CanvassZone) ?? 'subura'].cost + Number(p.gifts ?? 0),
       check: (s, a, p) => {
         if (!CANVASS_ZONES[p.zone as CanvassZone]) return 'Choose where to canvass';
-        const e = openElection(s);
-        const nextFor = e ? e.forYearBC : yearBC(s) - 1;
-        if (a.bornBC - nextFor < OFFICES.quaestor.minAge - 1) return 'Too young to be canvassing yet (wait until the year before you can stand)';
-        if (heldEver(s, a.id, 'quaestor')) return 'You have held the quaestorship';
+        if (candidacyOf(s, a.id)) return null;
+        if (a.bornBC - (yearBC(s) - 1) < OFFICES.quaestor.minAge - 1) return 'Too young to be canvassing yet (wait until the year before you can stand)';
         return null;
       },
       start: (s, a, p) => {
@@ -232,8 +279,7 @@ export const offices: SystemDef = {
       npc: (s, a) => {
         if (a.id === s.playerId) return [];
         const cand = candidacyOf(s, a.id);
-        const e = openElection(s);
-        const soon = !cand && !e && a.traits.ambition > 0.5 && !quaestorIneligible(s, a, yearBC(s) - 1) && dateOf(s.day).month >= 2;
+        const soon = !cand && !openElections(s).length && a.traits.ambition > 0.5 && !quaestorIneligible(s, a, yearBC(s) - 1) && dateOf(s.day).month >= 2;
         if (!cand && !soon) return [];
         const cash = cashOf(s, a.id);
         const opts = [];
@@ -312,14 +358,10 @@ export const offices: SystemDef = {
 
   yearly(s) {
     const y = yearBC(s);
-    if (FASTI[y] || y >= 120) {
-      fillSeats(s, 'consul', y, 2, FASTI[y]?.consuls ?? []);
-      fillSeats(s, 'praetor', y, 6, FASTI[y]?.praetors ?? []);
-      for (const key of FASTI[y]?.tribunes ?? []) {
-        const c = byHistorical(s, key);
-        if (c?.alive && !c.flags.exiled && !s.offices.records.some((r) => r.who === c.id && r.yearBC === y && r.office !== 'military_tribune')) record(s, c.id, 'tribune_pleb', y);
-      }
-    }
+    // Elections fill the seats; if one ever left a curule chair empty, the Senate's men fill it.
+    const have = (o: OfficeId) => s.offices.records.filter((r) => r.office === o && r.yearBC === y).length;
+    if (have('consul') < 2) fillSeats(s, 'consul', y, 2 - have('consul'), FASTI[y]?.consuls ?? []);
+    if (have('praetor') < 6) fillSeats(s, 'praetor', y, 6 - have('praetor'), FASTI[y]?.praetors ?? []);
     for (const r of s.offices.records) {
       if (r.yearBC === y && OFFICES[r.office].makesSenator) {
         const c = s.chars[r.who];
@@ -336,10 +378,12 @@ export const offices: SystemDef = {
     const y = d.yearBC;
     if (d.month === 2) departGovernors(s, y);
     if (d.month === 1) offerService(s);
-    if (d.month === QUAESTOR_ELECTION.openMonth && !openElection(s)) {
-      s.offices.elections.push(newElection(s));
-      emit(s, 'log', { text: `Candidates for the quaestorship of ${y - 1} BC may now give in their names.`, kind: 'election' });
+    if (d.month === QUAESTOR_ELECTION.openMonth && !openElections(s).length) {
+      for (const def of ELECTION_DEFS) if (!def.years || def.years.includes(y)) s.offices.elections.push(newElection(s, def));
+      emit(s, 'log', { text: `Candidates for the magistracies of ${y - 1} BC may now give in their names.`, kind: 'election' });
     }
+    // Old results are kept a few years for the record.
+    if (d.month === 0 && s.offices.elections.length > 60) s.offices.elections = s.offices.elections.slice(-40);
   },
 
   daily(s) {
@@ -353,10 +397,9 @@ export const offices: SystemDef = {
         emit(s, 'governor.returned', { who: g.who, province: g.province, extorted: g.extorted });
       }
     }
-    const e = openElection(s);
-    if (!e) return;
-    if (s.day === e.professioDeadline) spawnOutsiders(s, e);
-    if (s.day >= e.day) {
+    for (const e of openElections(s)) {
+      if (s.day === e.professioDeadline) spawnOutsiders(s, e);
+      if (s.day < e.day) continue;
       const pc = e.candidates.find((c) => c.who === s.playerId);
       if (pc && s.chars[s.playerId].alive && s.chars[s.playerId].location === 'rome') {
         if (!s.flags[`vote_called_${e.id}_${e.postponements}`]) {
@@ -368,8 +411,8 @@ export const offices: SystemDef = {
   },
 
   blocks(s) {
-    const e = openElection(s);
-    if (e && s.day >= e.day && e.candidates.some((c) => c.who === s.playerId) && s.chars[s.playerId].location === 'rome') return 'election';
+    const e = electionOfCandidate(s, s.playerId);
+    if (e && s.day >= e.day && s.chars[s.playerId].location === 'rome') return 'election';
     return null;
   },
 };

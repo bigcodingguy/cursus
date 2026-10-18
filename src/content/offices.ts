@@ -12,12 +12,43 @@ export interface OfficeDef {
 export const OFFICES: Record<OfficeId, OfficeDef> = {
   military_tribune: { id: 'military_tribune', label: 'Military tribune', minAge: 17, dignitas: 4, makesSenator: false },
   quaestor: { id: 'quaestor', label: 'Quaestor', minAge: 27, dignitas: 8, makesSenator: true },
-  tribune_pleb: { id: 'tribune_pleb', label: 'Tribune of the plebs', minAge: 27, dignitas: 6, makesSenator: false },
-  aedile: { id: 'aedile', label: 'Aedile', minAge: 36, dignitas: 8, makesSenator: true },
+  tribune_pleb: { id: 'tribune_pleb', label: 'Tribune of the plebs', minAge: 27, dignitas: 6, makesSenator: true },
+  aedile: { id: 'aedile', label: 'Aedile', minAge: 33, dignitas: 8, makesSenator: true },
   praetor: { id: 'praetor', label: 'Praetor', minAge: 39, dignitas: 12, makesSenator: true },
   consul: { id: 'consul', label: 'Consul', minAge: 42, dignitas: 18, makesSenator: true },
   censor: { id: 'censor', label: 'Censor', minAge: 45, dignitas: 8, makesSenator: true },
 };
+
+export interface ElectionDef {
+  office: OfficeId;
+  seats: number;
+  month: number;
+  dom: number;
+  assembly: 'tribal' | 'centuriate';
+  /** Censors are elected only in census years (BC). */
+  years?: number[];
+}
+
+/** The summer elections, in the order they were held. Each runs as a real vote. */
+export const ELECTION_DEFS: ElectionDef[] = [
+  { office: 'censor', seats: 2, month: 6, dom: 2, assembly: 'centuriate', years: [131, 125, 120, 115, 109, 102] },
+  { office: 'consul', seats: 2, month: 6, dom: 5, assembly: 'centuriate' },
+  { office: 'praetor', seats: 6, month: 6, dom: 9, assembly: 'centuriate' },
+  { office: 'aedile', seats: 4, month: 6, dom: 14, assembly: 'tribal' },
+  { office: 'tribune_pleb', seats: 10, month: 6, dom: 18, assembly: 'tribal' },
+  { office: 'quaestor', seats: 8, month: 6, dom: 25, assembly: 'tribal' },
+];
+
+/** The centuriate assembly: the classes by wealth, the richest voting first and weighing most. 193 centuries. */
+export const CENTURIES = [
+  { id: 'equites', label: 'The equestrian centuries', weight: 18, voters: 600, wealth: 1 },
+  { id: 'class1', label: 'The first class', weight: 80, voters: 1600, wealth: 0.85 },
+  { id: 'class2', label: 'The second class', weight: 20, voters: 600, wealth: 0.6 },
+  { id: 'class3', label: 'The third class', weight: 20, voters: 600, wealth: 0.45 },
+  { id: 'class4', label: 'The fourth class', weight: 20, voters: 700, wealth: 0.3 },
+  { id: 'class5', label: 'The fifth class', weight: 30, voters: 900, wealth: 0.15 },
+  { id: 'proletarii', label: 'The proletarii', weight: 5, voters: 1200, wealth: 0 },
+];
 
 /** Quaestorian election: seats, timing. Voting on a.d. VIII Kal. Sext. (25 Quintilis). */
 export const QUAESTOR_ELECTION = {

@@ -3,6 +3,7 @@
 import { emit, on } from '../../bus';
 import type { SystemDef } from '../../core';
 import { pick, rand } from '../../rng';
+import { heirOf } from '../family/api';
 import { ageOf, clamp, fullName } from '../../util';
 
 const YOUNG_CAUSES = ['a fever caught in the summer heat', 'a fall from his horse on the Campus', 'a wound that turned bad', 'drowning while swimming in the Tiber', 'a sudden fever'];
@@ -22,7 +23,8 @@ export const people: SystemDef = {
       emit(s, 'hook', { name: 'death', roles: { dead: c.id } });
       for (const o of Object.values(s.chars)) if (o.patronId === c.id) o.patronId = null;
       if (c.id === s.playerId) {
-        s.ended = { day: s.day, reason: `You died: ${e.cause}.` };
+        // With an heir the family goes on (see the family system); without one, the house is extinct.
+        if (!heirOf(s, c.id)) s.ended = { day: s.day, reason: `You died (${e.cause}), leaving no son to carry on the family. The house is extinct.` };
         emit(s, 'pause', { reason: 'player died' });
       }
     });
@@ -101,9 +103,12 @@ export const people: SystemDef = {
   monthly(s) {
     for (const c of Object.values(s.chars)) {
       if (!c.alive) continue;
-      // Slice rule: no natural death for the player until heirs exist (Phase 3). See DECISIONS.md.
-      if (c.id === s.playerId) continue;
       const age = ageOf(s, c);
+      // Children die easily.
+      if (age < 5) {
+        if (rand(s.rng) < 0.006) emit(s, 'death', { who: c.id, cause: pick(s.rng, ['a childhood fever', 'a sickness of the summer', 'a cough that would not leave him']) });
+        continue;
+      }
       // Gompertz: about 0.2% a year at 20, 0.7% at 35, 2.6% at 50, 7% at 62, 16% at 72.
       const q = Math.min(0.5, 0.0035 * Math.exp(0.083 * Math.max(0, age - 26)));
       const monthly = 1 - Math.pow(1 - q, 1 / 12);
