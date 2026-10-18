@@ -3,6 +3,7 @@ import { runLifetime } from '../src/sim/bots';
 import { command, tick } from '../src/sim/core';
 import { deserialize, serialize } from '../src/sim/save';
 import { newGame } from '../src/sim/setup';
+import { visibleChoices } from '../src/sim/systems/events/api';
 import { totalCash } from '../src/sim/systems/money/api';
 import { forecastRuns, openElection, winChance } from '../src/sim/systems/offices/api';
 import { standingOf } from '../src/sim/systems/standing/api';
@@ -119,7 +120,7 @@ describe('the world comes to the player', () => {
             last = p.uid;
             days.push(s.day);
           }
-          command(s, { type: 'choose', uid: p.uid, choice: 0 });
+          command(s, { type: 'choose', uid: p.uid, choice: visibleChoices(s, p)[0]?.index ?? 0 });
           if (s.events.pending.some((x) => x.uid === p.uid)) command(s, { type: 'dismiss', uid: p.uid });
         }
         tick(s);
