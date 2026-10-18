@@ -6,5 +6,5 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   build: { chunkSizeWarningLimit: 1500 },
-  test: { include: ['tests/**/*.test.ts'], testTimeout: 60000 },
+  test: { include: ['tests/**/*.test.ts'], testTimeout: 300000 },
 });

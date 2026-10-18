@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CAMPAIGNS, CANVASS_ZONES, type CanvassZone } from '../content/offices';
+import { CAMPAIGNS, CANVASS_ZONES, OFFICES, type CanvassZone } from '../content/offices';
 import { PLACES } from '../content/places';
 import { checkAction, getAction } from '../sim/core';
 import { availableIssues, bankers, creditLimit } from '../sim/systems/city';
@@ -7,7 +7,7 @@ import { playerCase, chargeLabel } from '../sim/systems/courts/api';
 import { cashOf, loansOwedBy } from '../sim/systems/money/api';
 import { opinion } from '../sim/systems/network/api';
 import { campaignOpen } from '../sim/systems/offices';
-import { candidacyOf, openElection } from '../sim/systems/offices/api';
+import { candidacyOf, ineligibleFor, openElection, openElections } from '../sim/systems/offices/api';
 import { clientsOf } from '../sim/systems/news';
 import { standingOf } from '../sim/systems/standing/api';
 import type { ActionParams, GameState, PlaceId } from '../sim/types';
@@ -224,15 +224,23 @@ function Campus({ s }: { s: GameState }) {
   const camps = CAMPAIGNS.filter((c) => campaignOpen(s, c.id));
   const [camp, setCamp] = useState(camps[0]?.id ?? '');
   const e = openElection(s);
+  const open = openElections(s);
   const ui = useUI();
+  const ladder = ['censor', 'consul', 'praetor', 'aedile', 'tribune_pleb', 'quaestor'];
+  // Offer the offices you could stand for; if none, the quaestorship with the reason you cannot.
+  const standable = open.filter((x) => !ineligibleFor(s, s.chars[s.playerId], x.office, x.forYearBC)).sort((a, b) => ladder.indexOf(a.office) - ladder.indexOf(b.office));
   return (
     <>
       {e && (
         <div className="card green">
-          Quaestorian elections: candidates declare by {shortDate(e.professioDeadline)}; the vote is on {shortDate(e.day)}. <a onClick={() => ui.setTab('election')}>See the field →</a>
+          Elections: candidates declare by {shortDate(e.professioDeadline)}; the votes run from {shortDate(Math.min(...open.map((x) => x.day)))} to {shortDate(Math.max(...open.map((x) => x.day)))}. <a onClick={() => ui.setTab('election')}>See the fields →</a>
         </div>
       )}
-      <ActionRow s={s} id="declare" params={{}} />
+      {candidacyOf(s, s.playerId) && <div className="card">You are a candidate. Canvass below, and look for endorsements among the senators.</div>}
+      {!candidacyOf(s, s.playerId) && (standable.length ? standable : open.filter((x) => x.office === 'quaestor')).map((x) => (
+        <ActionRow key={x.id} s={s} id="declare" params={{ office: x.office }} label={`Stand for ${OFFICES[x.office].label.toLowerCase()}`} />
+      ))}
+      {!open.length && <ActionRow s={s} id="declare" params={{}} />}
       <ActionRow s={s} id="exercise" params={{}} />
       <ActionRow s={s} id="canvass" params={{ zone, gifts }} label={CANVASS_ZONES[zone].label}>
         <div className="row small" style={{ marginTop: 3 }}>

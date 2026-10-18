@@ -1,3 +1,4 @@
+import { OFFICES } from '../content/offices';
 import { useEffect, useRef, useState } from 'react';
 import { PRAENOMINA, PLAYER_NOMINA } from '../content/cast';
 import { violenceLevel } from '../sim/systems/crisis/api';
@@ -11,6 +12,10 @@ import { EventModal, TrialModal, VoteModal } from './Modals';
 import { CasePanel, ChroniclePanel, ElectionPanel, FavorsPanel, GossipPanel, PeoplePanel, PersonPanel } from './Panels';
 import { PlacePanel } from './PlacePanel';
 import { WhatNow } from './WhatNow';
+import { FamilyPanel, LawsPanel } from './HousePanels';
+import { pendingProposals } from '../sim/systems/assembly/api';
+import { playerCase } from '../sim/systems/courts/api';
+import { openElections } from '../sim/systems/offices/api';
 import { exportSave, importSave, loadSlot, quit, saveSlot, setSpeed, slotInfo, SPEEDS, startNew, toast, useStore } from './store';
 import { plainDate } from '../sim/calendar';
 import { blockedBy } from '../sim/core';
@@ -181,9 +186,14 @@ function Ended({ s }: { s: GameState }) {
         <h2>{p.alive ? 'The end of the slice' : 'Here lies…'}</h2>
         <p>{s.ended!.reason}</p>
         <p>
-          {p.praenomen} {p.nomen} of Arpinum, aged {ageOf(s, p)}. Dignitas {standingOf(s, p.id, 'dignitas').total}. {s.offices.records.filter((r) => r.who === p.id && r.office === 'quaestor').length ? 'Quaestor. Senator.' : 'Never held a magistracy at Rome.'}
+          {p.praenomen} {p.nomen} of Arpinum, aged {ageOf(s, p)}. Dignitas {standingOf(s, p.id, 'dignitas').total}.{' '}
+          {(() => {
+            const held = [...new Set(s.offices.records.filter((r) => r.who === p.id && r.office !== 'military_tribune').map((r) => OFFICES[r.office].label))];
+            return held.length ? `${held.join(', ')}.` : 'Never held a magistracy at Rome.';
+          })()}{' '}
+          {s.family.line.length > 1 ? `The ${s.family.line.length}th head of the house to play.`.replace('2th', 'second').replace('3th', 'third') : ''}
         </p>
-        <p className="small muted">Heirs, the full cursus and the wider Mediterranean arrive in the next phase.</p>
+        <p className="small muted">The wider Mediterranean, the Social War and Sulla arrive in the next phase.</p>
         <div className="choices">
           <button onClick={() => quit()}>Title screen</button>
         </div>
@@ -210,7 +220,18 @@ function Game({ s, speed, version }: { s: GameState; speed: number; version: num
   const [guests, setGuests] = useState<string[]>([]);
   const ui = { place, setPlace, person, showPerson: (id: string) => { setPerson(id); setTab('person'); }, tab, setTab, guests, setGuests };
   const heardNew = s.news.items.filter((g) => !g.heard && g.day <= s.day).length;
-  const tabs: [Tab, string][] = [['person', 'Person'], ['people', 'People'], ['favors', 'Favors & debts'], ['gossip', `Gossip${heardNew ? ` (${heardNew} unheard)` : ''}`], ['chronicle', 'Calendar'], ['case', 'Case'], ['election', 'Election']];
+  // Case and election tabs appear only while there is one.
+  const tabs: [Tab, string][] = [
+    ['person', 'Person'],
+    ['people', 'People'],
+    ['family', 'Family'],
+    ['laws', `Laws${pendingProposals(s).length ? ` (${pendingProposals(s).length})` : ''}`],
+    ['favors', 'Favors'],
+    ['gossip', `Gossip${heardNew ? ` (${heardNew})` : ''}`],
+    ['chronicle', 'Calendar'],
+    ...(playerCase(s) ? [['case', 'Case'] as [Tab, string]] : []),
+    ...(openElections(s).length ? [['election', 'Elections'] as [Tab, string]] : []),
+  ];
   return (
     <UICtx.Provider value={ui}>
       <div className="app">
@@ -243,6 +264,8 @@ function Game({ s, speed, version }: { s: GameState; speed: number; version: num
               {tab === 'chronicle' && <ChroniclePanel s={s} />}
               {tab === 'case' && <CasePanel s={s} />}
               {tab === 'election' && <ElectionPanel s={s} />}
+              {tab === 'family' && <FamilyPanel s={s} />}
+              {tab === 'laws' && <LawsPanel s={s} />}
             </div>
           </div>
         </div>

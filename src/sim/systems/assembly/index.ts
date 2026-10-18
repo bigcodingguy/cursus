@@ -9,7 +9,7 @@ import type { GameState, Proposal } from '../../types';
 import { allChars, fullName, shortName } from '../../util';
 import { opinion } from '../network/api';
 import { holdsOffice } from '../offices/api';
-import { availableLaws, canPropose, lawDef, NOTICE_DAYS, pendingProposals, proposalOf, speechWeight, vetoChance, vetoers, voteChance } from './api';
+import { availableLaws, canPropose, lawDef, NOTICE_DAYS, passChance, pendingProposals, proposalOf, speechWeight, vetoChance, vetoers, voteChance } from './api';
 
 function proposal(s: GameState, id: unknown): Proposal | undefined {
   return s.assembly.proposals.find((p) => p.id === Number(id) && p.status === 'pending');
@@ -89,6 +89,7 @@ export const assembly: SystemDef = {
     registerAction({
       id: 'propose_law',
       label: 'Put a law to the people',
+      blurb: 'Post the bill in the Forum. The tribes vote on it in 24 days, unless a tribune forbids it.',
       place: () => 'forum',
       duration: () => 2,
       check: (s, a, p) => {
@@ -97,6 +98,8 @@ export const assembly: SystemDef = {
         if (!availableLaws(s).some((l) => l.id === p.law)) return 'That bill cannot be brought now';
         return null;
       },
+      // The chance as things stand today; speeches, vetoes and standing can move it before the vote.
+      odds: (s, a, p) => (lawDef(String(p.law)) ? passChance(s, { id: -1, law: String(p.law), proposer: a.id, proposedDay: s.day, voteDay: s.day + NOTICE_DAYS, status: 'pending', swing: 0, spoke: [] }) : null),
       complete: (s, a, p) => {
         if (!canPropose(s, a)) post(s, a.id, String(p.law));
       },
@@ -105,7 +108,7 @@ export const assembly: SystemDef = {
         if (rand(s.rng) > 0.25) return [];
         const out = [];
         for (const law of availableLaws(s)) {
-          const agree = law.side * -a.lean; // >0: a man of the people with a popular bill, or an optimate with the Senate's
+          const agree = law.side * a.lean; // >0: a man of the people with a popular bill, or an optimate with the Senate's
           const sponsor = law.sponsor && a.historical === law.sponsor ? 3 : 0;
           const u = 0.6 + 2.2 * agree + a.traits.ambition + sponsor + (law.appeal - 0.5) * 2;
           if (u > 1.5) out.push({ params: { law: law.id }, utility: u });
@@ -117,6 +120,7 @@ export const assembly: SystemDef = {
     registerAction({
       id: 'speak_on_law',
       label: 'Speak on a bill',
+      blurb: 'Address a contio from the Rostra. A good speaker moves votes; the proposer will remember.',
       place: () => 'forum',
       duration: () => 1,
       check: (s, a, p) => {
@@ -145,7 +149,7 @@ export const assembly: SystemDef = {
           if (pr.spoke.includes(a.id)) continue;
           const law = lawDef(pr.law)!;
           const op = opinion(s, a.id, pr.proposer).total;
-          const lean = law.side * -a.lean + op / 60;
+          const lean = law.side * a.lean + op / 60;
           if (Math.abs(lean) < 0.35) continue;
           out.push({ params: { proposal: pr.id, side: lean > 0 ? 'for' : 'against' }, utility: 0.8 + Math.abs(lean) * 1.5 + a.traits.ambition * 0.5 });
         }
@@ -156,6 +160,7 @@ export const assembly: SystemDef = {
     registerAction({
       id: 'veto_law',
       label: 'Interpose your veto',
+      blurb: 'One word, and the bill is dead. Its friends will not forget it, and in violent years a veto is dangerous.',
       place: () => 'forum',
       duration: () => 0,
       check: (s, a, p) => {

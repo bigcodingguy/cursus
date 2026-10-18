@@ -6,9 +6,9 @@ import { cashOf, debtOf, loansHeldBy, loansOwedBy } from '../sim/systems/money/a
 import { favorBalance, favorsOwed, memoriesAbout, opinion, tiesOf } from '../sim/systems/network/api';
 import { ASK_LABELS, askBlocked, type Ask } from '../sim/systems/city';
 import { ActionRow } from './PlacePanel';
-import { ambitions, recentlyRemembered, seenAs, whyMatters } from './people';
+import { recentlyRemembered, seenAs, whyMatters } from './people';
 import { clientsOf } from '../sim/systems/news';
-import { appealParts, candidacyOf, officesOf, openElection, profileOf, profiles, voteGap, voteOnce, winChance } from '../sim/systems/offices/api';
+import { appealParts, assemblyOf, officesOf, openElection, openElections, profileOf, profiles, voteGap, voteOnce, winChance } from '../sim/systems/offices/api';
 import { standingOf } from '../sim/systems/standing/api';
 import type { GameState } from '../sim/types';
 import { ageOf, fmtHS, fullName, shortName } from '../sim/util';
@@ -181,21 +181,13 @@ function PersonActions({ s, id }: { s: GameState; id: string }) {
 
 function YourselfDetails({ s }: { s: GameState }) {
   const me = s.chars[s.playerId];
+  const ui = useUI();
   const father = me.fatherId ? s.chars[me.fatherId] : undefined;
   const mother = Object.values(s.chars).find((c) => c.female && c.familyId === me.familyId);
-  const amb = ambitions(s);
   const recent = recentlyRemembered(s);
   const acct = s.money.accounts[me.id];
   return (
     <>
-      <h3>Ambitions</h3>
-      <ul className="list small">
-        {amb.map((a, i) => (
-          <li key={i}>
-            <b>{a.title}.</b> {a.step}
-          </li>
-        ))}
-      </ul>
       <h3>Family</h3>
       <div className="small">
         {father ? (
@@ -206,7 +198,7 @@ function YourselfDetails({ s }: { s: GameState }) {
           </div>
         ) : null}
         {mother && <div>Mother: {mother.nomen}, at Arpinum.</div>}
-        <div className="muted">Your father writes from time to time. Marriage and heirs come in the next phase.</div>
+        <div className="muted">Wife, children and heir: see <a onClick={() => ui.setTab('family')}>the Family tab</a>.</div>
       </div>
       <h3>Lately, men remember</h3>
       {recent.length ? (
@@ -343,8 +335,10 @@ export function ChroniclePanel({ s }: { s: GameState }) {
   const pl = s.chars[s.playerId];
   const upcoming: { day: number; text: string }[] = [];
   if (e) {
-    if (e.professioDeadline >= s.day) upcoming.push({ day: e.professioDeadline, text: 'Last day to declare for the quaestorship' });
-    upcoming.push({ day: e.day, text: 'Quaestorian elections on the Campus Martius' });
+    for (const x of openElections(s)) {
+      if (x.professioDeadline >= s.day && x === e) upcoming.push({ day: x.professioDeadline, text: 'Last day to declare a candidacy' });
+      upcoming.push({ day: x.day, text: `Elections for ${OFFICES[x.office].label.toLowerCase()} on the Campus Martius` });
+    }
   }
   if (pc?.trialDay) upcoming.push({ day: pc.trialDay, text: `Your trial: ${shortName(s.chars[pc.defendant])}` });
   if (pl.flags.returnDay) upcoming.push({ day: pl.flags.returnDay, text: 'You return to Rome' });
@@ -444,40 +438,57 @@ export function CasePanel({ s }: { s: GameState }) {
 }
 
 export function ElectionPanel({ s }: { s: GameState }) {
-  const e = openElection(s);
-  const last = [...s.offices.elections].reverse().find((x) => x.status === 'held');
+  const open = openElections(s);
+  const [pick, setPick] = useState<string | null>(null);
+  const e = open.find((x) => x.id === pick) ?? openElection(s);
+  const held = s.offices.elections.filter((x) => x.status === 'held');
+  const lastYear = held.length ? held[held.length - 1].forYearBC : undefined;
+  const chooser = open.length > 1 && (
+    <div className="tabs">
+      {open.map((x) => (
+        <button key={x.id} className={`ghost ${x.id === e?.id ? 'on' : ''}`} onClick={() => setPick(x.id)}>
+          {OFFICES[x.office].label}
+        </button>
+      ))}
+    </div>
+  );
   if (!e) {
     return (
       <div>
-        <p className="muted">No election is open. Candidacies for the quaestorship open on the Kalends of Iunius; the vote is on the 25th of Quintilis.</p>
-        {last?.results && (
-          <>
-            <h3>Last year: quaestors for {last.forYearBC} BC</h3>
-            <div className="small">{last.results.winners.map((w) => <span key={w}><Name s={s} id={w} /> · </span>)}</div>
-          </>
-        )}
+        <p className="muted">No election is open. Candidacies open on the Kalends of Iunius; the magistrates are elected in Quintilis, consuls first and quaestors last.</p>
+        {lastYear !== undefined && <h3>Elected last summer, for {lastYear} BC</h3>}
+        {held.filter((x) => x.forYearBC === lastYear && x.results).map((x) => (
+          <div key={x.id} className="small">
+            <b>{OFFICES[x.office].label}:</b> {x.results!.winners.map((w, i) => <span key={w}>{i ? ', ' : ''}<Name s={s} id={w} /></span>)}
+          </div>
+        ))}
       </div>
     );
   }
+  const unit = assemblyOf(e.office) === 'centuriate' ? 'centuries' : 'tribes';
   const profs = profiles(s, e);
   const proj = voteOnce(e, profs, null);
-  const mine = candidacyOf(s, s.playerId);
+  const mine = e.candidates.find((c) => c.who === s.playerId);
   const chance = mine ? winChance(s, e, s.playerId) : null;
   const gap = mine ? voteGap(s, e, s.playerId) : 0;
   const ranked = [...profs].sort((a, b) => proj.tally[b.who].tribes - proj.tally[a.who].tribes || proj.tally[b.who].votes - proj.tally[a.who].votes);
   const myProf = mine ? profileOf(s, mine) : null;
   return (
     <div>
-      <h2>Quaestorship for {e.forYearBC} BC</h2>
+      {chooser}
+      <h2>{OFFICES[e.office].label} for {e.forYearBC} BC</h2>
       <p className="small">
-        {e.seats} seats. Declare by {shortDate(e.professioDeadline)}. Vote on <b>{shortDate(e.day)}</b>
-        {e.postponements ? ` (postponed ${e.postponements}×)` : ''}. Each of the 35 tribes returns its top {e.seats}; the men who carry the most tribes are elected.
+        {e.seats} seat{e.seats > 1 ? 's' : ''}. Declare by {shortDate(e.professioDeadline)}. Vote on <b>{shortDate(e.day)}</b>
+        {e.postponements ? ` (postponed ${e.postponements}×)` : ''}.{' '}
+        {assemblyOf(e.office) === 'centuriate'
+          ? 'The centuriate assembly: 193 centuries voting by wealth, the equites and the first class first. The richest centuries count for most.'
+          : `The tribal assembly: each of the 35 tribes returns its top ${e.seats}; the men who carry the most tribes are elected.`}
       </p>
       {mine && (
         <div className="card green">
           Your chance of election: <Why b={{ total: chance!, parts: [{ label: `Share of ${200} simulated votes you win`, value: chance! }] }} asPct note="The real vote is one of these simulations, picked at random."><Odds p={chance!} /></Why>
           {gap > 0 && <div className="small">On the expected count you are about {gap.toLocaleString('en-US')} votes short in the tribes that would put you in.</div>}
-          {myProf && (
+          {myProf && unit === 'tribes' && (
             <div className="small">
               Your pull in a country tribe: <Why b={{ total: appealParts(myProf, 'Romilia').reduce((a, x) => a + x.value, 0), parts: appealParts(myProf, 'Romilia') }} digits={2}>Romilia</Why> · in a city tribe: <Why b={{ total: appealParts(myProf, 'Suburana').reduce((a, x) => a + x.value, 0), parts: appealParts(myProf, 'Suburana') }} digits={2}>Suburana</Why>
             </div>
@@ -491,7 +502,7 @@ export function ElectionPanel({ s }: { s: GameState }) {
             <th>Dignitas</th>
             <th>People</th>
             <th>Boni</th>
-            <th>Tribes (expected)</th>
+            <th>{unit === 'tribes' ? 'Tribes' : 'Centuries'} (expected)</th>
           </tr>
         </thead>
         <tbody>
@@ -508,11 +519,11 @@ export function ElectionPanel({ s }: { s: GameState }) {
       </table>
       {mine && (
         <>
-          <h3>Tribe by tribe (expected)</h3>
+          <h3>{unit === 'tribes' ? 'Tribe by tribe' : 'Century by century'} (expected)</h3>
           <table className="t">
             <thead>
               <tr>
-                <th>Tribe</th>
+                <th>{unit === 'tribes' ? 'Tribe' : 'Century'}</th>
                 <th>Your votes</th>
                 <th>Last seat</th>
                 <th></th>

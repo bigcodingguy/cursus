@@ -270,6 +270,9 @@ export const offices: SystemDef = {
           // A man history marks for one office that year keeps himself free for it.
           if (a.historical && !expectedBy(s, a, e.office, e.forYearBC) && (['consul', 'tribune_pleb', 'praetor'] as OfficeId[]).some((o) => expectedBy(s, a, o, e.forYearBC))) continue;
           const urge = urgeFor(s, a, e);
+          // A crowded field keeps all but history's men and the most eager out.
+          const crowded = e.candidates.length >= e.seats * (e.office === 'quaestor' || e.office === 'tribune_pleb' ? 2.5 : 3);
+          if (crowded && !expectedBy(s, a, e.office, e.forYearBC) && urge < 3) continue;
           out.push({ params: { office: e.office }, utility: urge > 0.75 ? 5 + Math.min(4, urge) : 0.5 });
         }
         return out;

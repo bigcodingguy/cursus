@@ -53,7 +53,7 @@ export function vetoChance(s: GameState, p: Proposal, t: Character): Breakdown {
   const op = opinion(s, t.id, p.proposer).total;
   const client = t.patronId === p.proposer;
   const parts = [
-    { label: 'Base', value: -3.2 },
+    { label: 'Base', value: -3.8 },
     { label: 'His politics against the bill', value: 3.4 * Math.max(0, hostility(t, law)) },
     { label: 'His opinion of the proposer', value: -op / 35 },
     { label: 'Boldness', value: (t.traits.boldness - 0.5) * 1.2 },

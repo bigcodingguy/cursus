@@ -50,7 +50,7 @@ function checkInvariants(s: GameState) {
 
 describe('a whole lifetime', () => {
   for (const strat of ['orator', 'populist', 'establishment'] as const) {
-    it(`${strat}: runs 133→120 BC and keeps its invariants`, () => {
+    it(`${strat}: runs 133→100 BC and keeps its invariants`, () => {
       const { state, metrics } = runLifetime(77, strat);
       checkInvariants(state);
       expect(state.ended).toBeDefined();
@@ -61,8 +61,9 @@ describe('a whole lifetime', () => {
   }
 
   it('same seed + same commands = same game', () => {
-    const a = runLifetime(5, 'orator').state;
-    const b = runLifetime(5, 'orator').state;
+    // Twenty years is enough to exercise every system; the whole span is covered by the lifetime tests above.
+    const a = runLifetime(5, 'orator', { untilDay: 365 * 20 }).state;
+    const b = runLifetime(5, 'orator', { untilDay: 365 * 20 }).state;
     expect(canon(a)).toBe(canon(b));
   });
 

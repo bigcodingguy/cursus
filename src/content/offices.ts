@@ -4,19 +4,21 @@ import type { OfficeId } from '../sim/types';
 export interface OfficeDef {
   id: OfficeId;
   label: string;
+  /** The office as a thing held: 'the consulship'. */
+  noun: string;
   minAge: number;
   dignitas: number;
   makesSenator: boolean;
 }
 
 export const OFFICES: Record<OfficeId, OfficeDef> = {
-  military_tribune: { id: 'military_tribune', label: 'Military tribune', minAge: 17, dignitas: 4, makesSenator: false },
-  quaestor: { id: 'quaestor', label: 'Quaestor', minAge: 27, dignitas: 8, makesSenator: true },
-  tribune_pleb: { id: 'tribune_pleb', label: 'Tribune of the plebs', minAge: 27, dignitas: 6, makesSenator: true },
-  aedile: { id: 'aedile', label: 'Aedile', minAge: 33, dignitas: 8, makesSenator: true },
-  praetor: { id: 'praetor', label: 'Praetor', minAge: 39, dignitas: 12, makesSenator: true },
-  consul: { id: 'consul', label: 'Consul', minAge: 42, dignitas: 18, makesSenator: true },
-  censor: { id: 'censor', label: 'Censor', minAge: 45, dignitas: 8, makesSenator: true },
+  military_tribune: { id: 'military_tribune', label: 'Military tribune', noun: 'military tribunate', minAge: 17, dignitas: 4, makesSenator: false },
+  quaestor: { id: 'quaestor', label: 'Quaestor', noun: 'quaestorship', minAge: 27, dignitas: 8, makesSenator: true },
+  tribune_pleb: { id: 'tribune_pleb', label: 'Tribune of the plebs', noun: 'tribunate', minAge: 27, dignitas: 6, makesSenator: true },
+  aedile: { id: 'aedile', label: 'Aedile', noun: 'aedileship', minAge: 33, dignitas: 8, makesSenator: true },
+  praetor: { id: 'praetor', label: 'Praetor', noun: 'praetorship', minAge: 39, dignitas: 12, makesSenator: true },
+  consul: { id: 'consul', label: 'Consul', noun: 'consulship', minAge: 42, dignitas: 18, makesSenator: true },
+  censor: { id: 'censor', label: 'Censor', noun: 'censorship', minAge: 45, dignitas: 8, makesSenator: true },
 };
 
 export interface ElectionDef {

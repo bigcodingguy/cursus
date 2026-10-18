@@ -1,16 +1,16 @@
 // UI-side reading of the sim: why a person matters to you, how you are seen, what to do next.
 // Pure functions over state; nothing here changes the game.
 
-import { CAMPAIGNS } from '../content/offices';
+import { CAMPAIGNS, OFFICES } from '../content/offices';
 import { dateOf, dayOf } from '../sim/calendar';
 import { getAction } from '../sim/core';
 import { playerCase } from '../sim/systems/courts/api';
 import { loansHeldBy, loansOwedBy } from '../sim/systems/money/api';
 import { favorBalance, hasTie, memoryValue, opinion } from '../sim/systems/network/api';
 import { campaignOpen } from '../sim/systems/offices';
-import { candidacyOf, heldEver, openElection, quaestorIneligible } from '../sim/systems/offices/api';
+import { candidacyOf, electionOfCandidate, heldEver, ineligibleFor, openElection, openElections } from '../sim/systems/offices/api';
 import { standingOf } from '../sim/systems/standing/api';
-import type { CharId, GameState, PlaceId } from '../sim/types';
+import type { CharId, GameState, OfficeId, PlaceId } from '../sim/types';
 import { ageOf, shortName } from '../sim/util';
 
 export interface Reason {
@@ -47,7 +47,7 @@ export function whyMatters(s: GameState, id: CharId): Reason[] {
     if (pc.jury.some((j) => j.charId === id && !j.rejected)) add('A juror in your case', 5);
   }
   const e = openElection(s);
-  if (e && candidacyOf(s, id)) add(candidacyOf(s, me.id) ? 'Your rival for the quaestorship' : 'Standing for quaestor', candidacyOf(s, me.id) ? 5 : 1);
+  if (e && candidacyOf(s, id)) add(electionOfCandidate(s, id) && electionOfCandidate(s, id) === electionOfCandidate(s, me.id) ? 'Your rival in the election' : `Standing for ${OFFICES[electionOfCandidate(s, id)?.office ?? 'quaestor'].label.toLowerCase()}`, electionOfCandidate(s, id) === electionOfCandidate(s, me.id) ? 5 : 1);
   if (e && candidacyOf(s, me.id)?.endorsements.includes(id)) add('Endorses you', 4, 'good');
   if ((s.network.memories[id] ?? []).some((m) => m.about === me.id && m.act.startsWith('Served under me'))) add('You served under him', 4, 'good');
   const op = opinion(s, id, me.id).total;
@@ -110,13 +110,25 @@ export function ambitions(s: GameState): Ambition[] {
     else out.push({ title: 'Make a name', step: 'Speak at a contio, and wait for a governor to come home to accuse.', place: 'forum' });
   }
 
-  if (!q) {
-    const forYear = me.bornBC - 27;
-    const e = openElection(s);
-    if (candidacyOf(s, me.id)) out.push({ title: 'Win the quaestorship', step: `Canvass the tribes and gather endorsements. The vote is on ${dayLabel(e!.day)}.`, place: 'campus' });
-    else if (e && !quaestorIneligible(s, me, e.forYearBC)) out.push({ title: 'Stand for quaestor', step: `Declare at the Campus Martius by ${dayLabel(e.professioDeadline)}.`, place: 'campus' });
-    else if (age >= 25) out.push({ title: 'Prepare for the quaestorship', step: `You can stand in the summer of ${forYear + 1} BC for ${forYear} BC. Canvass the tribes beforehand.`, place: 'campus' });
-  } else out.push({ title: 'Quaestor', step: 'You have reached the Senate. The rest of the cursus comes in the next phase.', done: true });
+  const mine = candidacyOf(s, me.id);
+  const myElection = mine ? electionOfCandidate(s, me.id) : undefined;
+  if (myElection) {
+    out.push({ title: `Win the ${OFFICES[myElection.office].noun}`, step: `Canvass and gather endorsements. The vote is on ${dayLabel(myElection.day)}.`, place: 'campus' });
+  } else {
+    // The next rung: the highest office open to you this summer, else the next you will qualify for.
+    const ladder: OfficeId[] = ['censor', 'consul', 'praetor', 'aedile', 'tribune_pleb', 'quaestor'];
+    const open = openElections(s).filter((e) => s.day <= e.professioDeadline && !ineligibleFor(s, me, e.office, e.forYearBC));
+    const best = ladder.map((o) => open.find((e) => e.office === o)).find(Boolean);
+    if (best) out.push({ title: `Stand for ${OFFICES[best.office].label.toLowerCase()}`, step: `Declare at the Campus Martius by ${dayLabel(best.professioDeadline)}.`, place: 'campus' });
+    else {
+      const next = [...ladder].reverse().find((o) => o !== 'tribune_pleb' && !s.offices.records.some((r) => r.who === me.id && r.office === o));
+      if (next && age >= OFFICES[next].minAge - 3) {
+        const why = ineligibleFor(s, { ...me, location: 'rome' }, next, Math.min(y - 1, me.bornBC - OFFICES[next].minAge));
+        out.push({ title: `Prepare for the ${OFFICES[next].noun}`, step: why ? `${why}.` : `You can stand in the summer of ${Math.min(y - 1, me.bornBC - OFFICES[next].minAge) + 1} BC. Build your name and your friendships first.`, place: 'campus' });
+      } else if (!next) out.push({ title: 'The summit', step: 'You have held every office Rome gives. Your sons are the house’s future now.', done: true });
+    }
+  }
+  void q;
 
   if (out.length < 3 && me.patronId) out.push({ title: 'Widen your friendships', step: 'Dine with men who matter, and take clients in the Subura.', place: me.home });
   void y;
@@ -138,9 +150,10 @@ export function keyDates(s: GameState): { day: number; text: string }[] {
   const e = openElection(s);
   const y = dateOf(s.day).yearBC;
   if (e) {
-    if (e.professioDeadline >= s.day) out.push({ day: e.professioDeadline, text: 'Last day to declare for quaestor' });
-    out.push({ day: e.day, text: 'Quaestorian elections' });
+    if (e.professioDeadline >= s.day) out.push({ day: e.professioDeadline, text: 'Last day to declare' });
+    out.push({ day: e.day, text: `Elections for ${OFFICES[e.office].label.toLowerCase()}` });
   } else out.push({ day: dayOf(y, 5, 1), text: 'Candidacies open' });
+  for (const p of s.assembly.proposals) if (p.status === 'pending' && p.proposer === s.playerId) out.push({ day: p.voteDay, text: 'The vote on your bill' });
   const pc = playerCase(s);
   if (pc?.trialDay) out.push({ day: pc.trialDay, text: 'Your trial' });
   for (const l of loansOwedBy(s, s.playerId)) out.push({ day: l.called ? l.callDeadline! : l.dueDay, text: `Loan from ${shortName(s.chars[l.lender])} ${l.called ? 'must be repaid' : 'falls due'}` });

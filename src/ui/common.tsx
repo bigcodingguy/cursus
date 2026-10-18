@@ -5,7 +5,7 @@ import type { Breakdown, Character, GameState, PlaceId } from '../sim/types';
 import { fullName, shortName } from '../sim/util';
 
 // ---------------- UI selection context ----------------
-export type Tab = 'person' | 'people' | 'favors' | 'gossip' | 'chronicle' | 'case' | 'election';
+export type Tab = 'person' | 'people' | 'family' | 'laws' | 'favors' | 'gossip' | 'chronicle' | 'case' | 'election';
 export interface UI {
   place: PlaceId;
   setPlace: (p: PlaceId) => void;

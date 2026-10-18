@@ -125,3 +125,6 @@ table.t tr.me td { background: #f6ead0; font-weight: 600; }
   .main { grid-template-columns: 1fr; }
   .left { border-right: none; }
 }
+.card.elogium { font-family: 'Cinzel', serif; letter-spacing: 0.04em; border-left-color: var(--ink, #222); text-align: center; }
+.card.elogium .small { font-family: 'EB Garamond', serif; letter-spacing: 0; }
+.row > .card { flex: 1; min-width: 0; }

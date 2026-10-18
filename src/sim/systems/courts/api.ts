@@ -24,7 +24,7 @@ export function caseById(s: GameState, id: string): Case | undefined {
 
 /** What the man is charged with, in plain words. */
 export function chargeLabel(c: Case): string {
-  if (c.charge === 'ambitus') return `bribery of the voters in his canvass for the ${OFFICES[c.province as OfficeId]?.label.toLowerCase() ?? 'magistracy'}`;
+  if (c.charge === 'ambitus') return `bribery of the voters in his canvass for the ${OFFICES[c.province as OfficeId]?.noun ?? 'magistracy'}`;
   return `extortion as governor of ${PROVINCES.find((p) => p.id === c.province)?.label ?? c.province}`;
 }
 

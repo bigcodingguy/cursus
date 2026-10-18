@@ -45,25 +45,28 @@ export function WhatNow({ s }: { s: GameState }) {
     }
     setOnboarded(true);
   };
+  const [more, setMore] = useState(false);
   const amb = ambitions(s);
   const dates = keyDates(s);
+  // The first-time note replaces the panel until dismissed, so the column never carries both.
+  if (!onboarded) return <div className="whatnow"><Onboarding onClose={close} /></div>;
+  const shown = more ? amb : amb.slice(0, 1);
   return (
     <div className="whatnow">
-      {!onboarded && <Onboarding onClose={close} />}
       <div className="small">
         <b>Now:</b> {currentActivity(s)}
       </div>
       <ul className="list small">
-        {amb.map((a, i) => (
+        {shown.map((a, i) => (
           <li key={i}>
-            <b>{a.title}.</b> {a.step}{' '}
-            {a.place && !a.done && (
-              <a onClick={() => ui.setPlace(a.place!)}>→ {PLACES.find((p) => p.id === a.place)?.label}</a>
-            )}
+            <b>{i === 0 ? 'Next: ' : ''}{a.title}.</b> {a.step}{' '}
+            {a.place && !a.done && <a onClick={() => ui.setPlace(a.place!)}>→ {PLACES.find((p) => p.id === a.place)?.label}</a>}
           </li>
         ))}
       </ul>
       <div className="small muted">
+        {amb.length > 1 && <a onClick={() => setMore(!more)}>{more ? 'fewer' : `${amb.length - 1} more aim${amb.length > 2 ? 's' : ''}`}</a>}
+        {amb.length > 1 && dates.length ? ' · ' : ''}
         {dates.map((d, i) => (
           <span key={i}>
             {i ? ' · ' : 'Coming: '}
