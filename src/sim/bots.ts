@@ -2,18 +2,20 @@
 
 import { CAMPAIGNS, CANVASS_ZONES } from '../content/offices';
 import { dateOf } from './calendar';
-import { blockedBy, checkAction, command, tick, type Command } from './core';
+import { blockedBy, checkAction, command, getAction, tick, type Command } from './core';
 import { newGame } from './setup';
 import { optionOdds, playerCase } from './systems/courts/api';
 import { visibleChoices } from './systems/events/api';
 import { cashOf, debtOf } from './systems/money/api';
 import { opinion } from './systems/network/api';
 import { campaignOpen } from './systems/offices';
-import { candidacyOf, heldEver, ineligibleFor, openElections } from './systems/offices/api';
+import { candidacyOf, heldEver, holdsOffice, ineligibleFor, openElections } from './systems/offices/api';
+import { availableLaws, canPropose, lawDef, pendingProposals } from './systems/assembly/api';
+import { marriageable } from './systems/family/api';
 import { standingOf } from './systems/standing/api';
 import { availableIssues, bankers, creditLimit } from './systems/city';
 import { clientsOf } from './systems/news';
-import type { ActionParams, GameState } from './types';
+import type { ActionParams, GameState, OfficeId } from './types';
 import { allChars, ageOf, byHistorical, player } from './util';
 
 export type StrategyId = 'orator' | 'populist' | 'establishment';
@@ -42,6 +44,18 @@ const OPP_PREFS: Record<string, string[]> = {
   opp_father_letter: ['Write back'],
   opp_elder_notice: ['Go, and listen'],
   legions: ['Join'],
+  aedile_games: ['Borrow and make', 'Give them generously'],
+  eques_offer: ['Take his money'],
+  vote_called: ['Keep your word'],
+  province_offer: ['Govern as most'],
+  command_offer: ['Take the command'],
+  city_gift: ['Refuse'],
+  praetor_presides: ['Preside fairly'],
+  censor_start: ['Leave the roll'],
+  numidicus_oath: ['Swear'],
+  saturninus_end: ['Go home'],
+  mob_at_door: ['Leave the city'],
+  client_veto: ['Let it pass'],
 };
 
 export const STRATEGIES: Record<StrategyId, Strategy> = {
@@ -153,6 +167,7 @@ function decide(s: GameState, st: Strategy): void {
     const order = st.id === 'populist' ? ['censor', 'consul', 'praetor', 'tribune_pleb', 'aedile', 'quaestor'] : ['censor', 'consul', 'praetor', 'aedile', 'tribune_pleb', 'quaestor'];
     for (const office of order) {
       const e = openElections(s).find((x) => x.office === office);
+      if (office === 'tribune_pleb' && heldEver(s, me.id, 'tribune_pleb')) continue;
       if (e && s.day <= e.professioDeadline && !ineligibleFor(s, me, e.office, e.forYearBC) && act(s, 'declare', { office })) return;
     }
   }
@@ -168,6 +183,29 @@ function decide(s: GameState, st: Strategy): void {
     if (act(s, 'canvass', { zone: z, gifts })) return;
   } else if (age >= 26 && !heldEver(s, me.id, 'quaestor') && every(s, 'groundwork', 20)) {
     if (act(s, 'canvass', { zone: s.day % 2 ? 'subura' : 'campus' })) return;
+  }
+
+  // Marriage: a wife from the best house that will have you.
+  if (age >= 22 && !me.spouseId && every(s, 'marry', 45)) {
+    const brides = allChars(s)
+      .filter((w) => w.female && marriageable(s, w) && w.familyId !== me.familyId)
+      .map((w) => ({ w, p: getAction('propose_marriage')!.odds?.(s, me, { bride: w.id })?.total ?? 0, house: w.familyId ? s.families[w.familyId]?.consulAncestors ?? 0 : 0 }))
+      .filter((x) => x.p >= 0.3)
+      .sort((a, b) => b.house + b.p * 3 - (a.house + a.p * 3));
+    if (brides[0] && act(s, 'propose_marriage', { bride: brides[0].w.id })) return;
+  }
+
+  // Laws: a magistrate brings the bill his politics favor; others speak; a tribune vetoes the other side's bills.
+  const want = (side: number) => (st.id === 'populist' ? -side : st.id === 'establishment' ? side : 0.3 - Math.abs(side));
+  if (!canPropose(s, me)) {
+    const law = availableLaws(s).sort((a, b) => want(b.side) + b.appeal - (want(a.side) + a.appeal))[0];
+    if (law && want(law.side) + law.appeal > 0.9 && act(s, 'propose_law', { law: law.id })) return;
+  }
+  for (const pr of pendingProposals(s)) {
+    const law = lawDef(pr.law)!;
+    if (pr.proposer === me.id) continue;
+    if (holdsOffice(s, me.id, 'tribune_pleb') && want(law.side) < -0.6 && s.day >= pr.voteDay - 2 && act(s, 'veto_law', { proposal: pr.id })) return;
+    if (!pr.spoke.includes(me.id) && Math.abs(want(law.side)) > 0.4 && act(s, 'speak_on_law', { proposal: pr.id, side: want(law.side) > 0 ? 'for' : 'against' })) return;
   }
 
   // Prosecutions.
@@ -210,17 +248,31 @@ function decide(s: GameState, st: Strategy): void {
     if (guests.length && act(s, 'dinner', { guests, style: 'modest' })) return;
   }
   if (every(s, 'visit', 7)) {
-    const pool = allChars(s).filter((x) => x.alive && x.location === 'rome' && x.rank === 'senator' && x.id !== me.id);
+    const pool = allChars(s).filter((x) => x.alive && !x.female && x.location === 'rome' && x.rank === 'senator' && x.id !== me.id);
     const t = me.patronId && s.day % 3 === 0 ? s.chars[me.patronId] : pool[s.day % Math.max(1, pool.length)];
     if (t && act(s, 'visit', { target: t.id, ask: 'none' })) return;
   }
   if (every(s, 'listen', 5)) act(s, 'listen');
 }
 
+const LADDER: (OfficeId | 'none')[] = ['none', 'military_tribune', 'quaestor', 'tribune_pleb', 'aedile', 'praetor', 'consul', 'censor'];
+function highestOf(s: GameState, ids: string[]): OfficeId | 'none' {
+  let best = 0;
+  for (const r of s.offices.records) if (ids.includes(r.who)) best = Math.max(best, LADDER.indexOf(r.office));
+  return LADDER[best];
+}
+
 export interface RunMetrics {
   strategy: StrategyId;
   seed: number;
-  highest: 'none' | 'military_tribune' | 'quaestor';
+  /** The first man's career. */
+  highest: OfficeId | 'none';
+  /** The best office anyone in the player's line reached. */
+  highestLine: OfficeId | 'none';
+  generations: number;
+  extinct: boolean;
+  nobilis: boolean;
+  laws: number;
   quaestorAge?: number;
   died: boolean;
   deathCause?: string;
@@ -232,7 +284,7 @@ export interface RunMetrics {
   debtEnd: number;
   stabilityByYear: Record<number, number>;
   firedDay: Record<string, number>;
-  moments: { capitolPatron: boolean; creditorCase: boolean; creditorCaseAge?: number; omen: boolean };
+  moments: { capitolPatron: boolean; creditorCase: boolean; creditorCaseAge?: number; omen: boolean; gamesDebt: boolean; lateLetter: boolean; daughter: boolean; clientVeto: boolean; nobleMask: boolean };
   trials: number;
   trialsWon: number;
   electionsContested: number;
@@ -285,16 +337,21 @@ export function runLifetime(seed: number, strategyId: StrategyId, opts: { untilD
     tick(s);
   }
   handlePending(s, st);
-  const me = player(s);
+  const me = s.chars[s.family.line[0]];
   const recs = s.offices.records.filter((r) => r.who === me.id);
   const q = recs.find((r) => r.office === 'quaestor');
   const father = me.fatherId ? s.chars[me.fatherId] : undefined;
   const metrics: RunMetrics = {
     strategy: strategyId,
     seed,
-    highest: q ? 'quaestor' : recs.some((r) => r.office === 'military_tribune') ? 'military_tribune' : 'none',
+    highest: highestOf(s, [me.id]),
+    highestLine: highestOf(s, s.family.line),
+    generations: s.family.line.length,
+    extinct: !!s.ended?.reason.includes('extinct'),
+    nobilis: (s.families[me.familyId ?? '']?.consulAncestors ?? 0) > 0,
+    laws: s.assembly.proposals.filter((p) => s.family.line.includes(p.proposer) && p.status === 'passed').length,
     quaestorAge: q ? me.bornBC - q.yearBC : undefined,
-    died: !me.alive,
+    died: !me.alive && (me.died?.day ?? 0) < s.endDay,
     deathCause: me.died?.cause,
     exiled: !!me.flags.exiled,
     bankrupt: s.money.bankrupt.includes(me.id),
@@ -304,7 +361,7 @@ export function runLifetime(seed: number, strategyId: StrategyId, opts: { untilD
     debtEnd: debtOf(s, me.id),
     stabilityByYear,
     firedDay: { ...s.events.fired },
-    moments: { capitolPatron: !!s.flags.moment_capitol_patron, creditorCase: creditorCaseAge !== undefined, creditorCaseAge, omen: s.events.fired.omen !== undefined },
+    moments: { capitolPatron: !!s.flags.moment_capitol_patron, creditorCase: creditorCaseAge !== undefined, creditorCaseAge, omen: s.events.fired.omen !== undefined, gamesDebt: s.events.fired.eques_offer !== undefined, lateLetter: s.events.fired.letter_death !== undefined, daughter: s.events.fired.opp_daughter_suitors !== undefined, clientVeto: s.events.fired.client_veto !== undefined, nobleMask: s.events.fired.family_consul !== undefined },
     trials,
     trialsWon,
     electionsContested: s.offices.elections.filter((e) => e.candidates.some((c) => c.who === me.id)).length,

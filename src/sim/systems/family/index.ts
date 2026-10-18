@@ -171,6 +171,19 @@ export const family: SystemDef = {
       emit(s, 'event.trigger', { eventId: 'succession', roles: { dead: c.id, heir }, vars: { age: ageOf(s, c), cause: e.cause, elogium: lines.join('\n\n'), heirAge: ageOf(s, s.chars[heir]) } });
     });
 
+    on('exile', (s, e) => {
+      if (e.who !== s.playerId) return;
+      const c = s.chars[e.who];
+      const heir = heirOf(s, c.id);
+      if (!heir || ageOf(s, s.chars[heir]) < 16) return;
+      s.playerId = heir;
+      s.family.line.push(heir);
+      // He takes half of what his father could carry off; the house in Rome is his.
+      const cash = s.money.accounts[c.id]?.cash ?? 0;
+      if (cash > 0) emit(s, 'transfer', { from: c.id, to: heir, amount: Math.round(cash / 2), reason: 'left to his son on going into exile' });
+      emit(s, 'event.trigger', { eventId: 'succession_exile', roles: { exile: c.id, heir }, vars: { reason: e.reason, heirAge: ageOf(s, s.chars[heir]) } });
+    });
+
     registerCommand('family.setHeir', (s, cmd) => {
       const id = String(cmd.id);
       const c = s.chars[id];

@@ -1,6 +1,7 @@
 // Courts: pure computation of juror leanings and exact verdict odds.
 
-import type { Breakdown, Case, CasePrep, Character, GameState, Juror, Strategy } from '../../types';
+import { OFFICES, PROVINCES } from '../../../content/offices';
+import type { Breakdown, Case, CasePrep, Character, GameState, Juror, OfficeId, Strategy } from '../../types';
 import { ageOf, breakdown, sigmoid } from '../../util';
 import { opinion } from '../network/api';
 import { standingOf } from '../standing/api';
@@ -19,6 +20,12 @@ export const ROUND_NAMES = ['Opening speeches', 'The witnesses', 'Closing speech
 
 export function caseById(s: GameState, id: string): Case | undefined {
   return s.courts.cases.find((c) => c.id === id);
+}
+
+/** What the man is charged with, in plain words. */
+export function chargeLabel(c: Case): string {
+  if (c.charge === 'ambitus') return `bribery of the voters in his canvass for the ${OFFICES[c.province as OfficeId]?.label.toLowerCase() ?? 'magistracy'}`;
+  return `extortion as governor of ${PROVINCES.find((p) => p.id === c.province)?.label ?? c.province}`;
 }
 
 export function playerCase(s: GameState): Case | undefined {

@@ -12,9 +12,10 @@ export const migrations: Record<number, Migration> = {
     ev.lastPrompt = s.day;
     return s;
   },
-  // v3: family and dynasty.
+  // v3: family and dynasty; laws before the assembly.
   2: (s) => {
     s.family = { marriages: [], heirs: {}, elogia: [], line: [s.playerId] };
+    s.assembly = { proposals: [], nextId: 1, passed: {} };
     return s;
   },
 };

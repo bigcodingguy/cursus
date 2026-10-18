@@ -151,6 +151,8 @@ export interface Governorship {
   departDay: number;
   returnDay: number;
   extorted: number;
+  /** Gifts taken on the spot (already paid), still evidence at a trial. */
+  taken?: number;
   returned: boolean;
 }
 export interface Candidate {
@@ -214,6 +216,8 @@ export interface TrialRound {
 }
 export interface Case {
   id: string;
+  /** Default 'repetundae' (extortion). For 'ambitus', `province` holds the office sought. */
+  charge?: 'repetundae' | 'ambitus';
   defendant: CharId;
   province: string;
   extorted: number;
@@ -304,6 +308,27 @@ export interface FamilyState {
   line: CharId[];
 }
 
+// ---------------- assembly (laws) ----------------
+export interface Proposal {
+  id: number;
+  law: string;
+  proposer: CharId;
+  proposedDay: number;
+  voteDay: number;
+  status: 'pending' | 'passed' | 'failed' | 'vetoed' | 'withdrawn';
+  vetoedBy?: CharId;
+  /** Speeches for (+) and against (-) since it was posted, in logit units. */
+  swing: number;
+  /** Who has spoken, so a man speaks once. */
+  spoke: CharId[];
+}
+export interface AssemblyState {
+  proposals: Proposal[];
+  nextId: number;
+  /** Law id -> day it passed. */
+  passed: Record<string, number>;
+}
+
 // ---------------- log ----------------
 export interface LogEntry {
   day: number;
@@ -335,6 +360,7 @@ export interface GameState {
   events: EventsState;
   news: NewsState;
   family: FamilyState;
+  assembly: AssemblyState;
   log: LogEntry[];
   pauseRequests: string[];
   ended?: { day: number; reason: string };

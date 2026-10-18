@@ -46,6 +46,9 @@ export interface BusEvents {
   patron: { client: CharId; patron: CharId | null };
   /** A named moment content events can listen for (see EventDef.hook). */
   hook: { name: string; roles: Record<string, CharId>; vars?: Record<string, string | number> };
+  'law.proposed': { id: number; law: string; proposer: CharId };
+  'law.passed': { id: number; law: string; proposer: CharId };
+  'office.start': { who: CharId; office: OfficeId; yearBC: number };
   'event.trigger': { eventId: string; roles?: Record<string, CharId>; vars?: Record<string, string | number>; delay?: number };
 }
 export type BusType = keyof BusEvents;

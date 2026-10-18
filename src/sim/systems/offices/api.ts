@@ -116,12 +116,19 @@ export function assemblyOf(office: OfficeId): 'tribal' | 'centuriate' {
 }
 
 /** History's expectation: men the fasti name for this office and year carry the city's assumption with them. */
-export function expectedBy(c: Character, office: OfficeId, forYearBC: number): boolean {
+/** History marks this man for this office about now (within two years of the recorded year), and he has not had it yet. */
+export function expectedBy(s: GameState, c: Character, office: OfficeId, forYearBC: number): boolean {
   if (!c.historical) return false;
-  const f = FASTI[forYearBC];
-  if (!f) return false;
-  const list = office === 'consul' ? f.consuls : office === 'tribune_pleb' ? f.tribunes : office === 'praetor' ? f.praetors : undefined;
-  return !!list?.includes(c.historical);
+  for (let y = forYearBC + 2; y >= forYearBC - 2; y--) {
+    const f = FASTI[y];
+    if (!f) continue;
+    const list = office === 'consul' ? f.consuls : office === 'tribune_pleb' ? f.tribunes : office === 'praetor' ? f.praetors : office === 'quaestor' ? f.quaestors : undefined;
+    if (!list?.includes(c.historical)) continue;
+    // Already held it in that window (a man listed for several consulships counts each one).
+    const held = s.offices.records.some((r) => r.who === c.id && r.office === office && Math.abs(r.yearBC - y) <= 2 && r.yearBC !== forYearBC && (office !== 'consul' || r.yearBC === y));
+    if (!held) return true;
+  }
+  return false;
 }
 
 // ---------------- the vote ----------------
@@ -166,7 +173,7 @@ export function profileOf(s: GameState, cand: Candidate, e?: Election): Profile 
     canvass: cand.canvass,
     bribes: cand.bribes,
     endorsers: cand.endorsements.filter((x) => s.chars[x]?.alive).map((x) => ({ tribe: s.chars[x].tribe, dig: standingOf(s, x, 'dignitas').total })),
-    expected: !!e && expectedBy(c, e.office, e.forYearBC),
+    expected: !!e && expectedBy(s, c, e.office, e.forYearBC),
     assembly: e ? assemblyOf(e.office) : 'tribal',
   };
 }
@@ -205,7 +212,7 @@ export function appealParts(p: Profile, unit: string | Unit): { label: string; v
     for (const x of p.endorsers) endorse += (x.dig / 100) * (x.tribe === u.id ? 0.8 : 0.12);
     if (endorse) parts.push({ label: 'Endorsements', value: Math.min(1, endorse) });
   }
-  if (p.expected) parts.push({ label: 'Everyone expects him to win', value: 1.4 });
+  if (p.expected) parts.push({ label: 'Everyone expects him to win', value: 2.0 });
   return parts;
 }
 

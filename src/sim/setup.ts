@@ -48,6 +48,7 @@ export function emptyState(seed: number): GameState {
     events: { fired: {}, pending: [], nextUid: 1, scheduled: [], lastPrompt: START_DAY },
     news: { items: [], nextId: 1 },
     family: { marriages: [], heirs: {}, elogia: [], line: [] },
+    assembly: { proposals: [], nextId: 1, passed: {} },
     log: [],
     pauseRequests: [],
   };

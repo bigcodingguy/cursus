@@ -7,7 +7,9 @@ import { getAction, type SystemDef } from '../../core';
 import { evalCond, renderText } from '../../dsl';
 import { chance, pick, randInt } from '../../rng';
 import type { GameState } from '../../types';
-import { allChars, isActiveMan } from '../../util';
+import { allChars, isActiveMan, shortName } from '../../util';
+import { favorBalance, hasTie } from '../network/api';
+import { PROVINCES } from '../../../content/offices';
 
 export function clientsOf(s: GameState, id: string) {
   return allChars(s).filter((c) => c.alive && c.patronId === id);
@@ -38,6 +40,21 @@ export const news: SystemDef = {
       });
       if (s.news.items.length > 300) s.news.items.splice(0, s.news.items.length - 300);
     });
+    on('death', (s, e) => {
+      const c = s.chars[e.who];
+      const pl = s.chars[s.playerId];
+      if (!c || c.id === s.playerId || !pl) return;
+      const there = c.location === 'abroad' ? awayDays(s, c.id) : 0;
+      const here = pl.location === 'abroad' ? awayDays(s, pl.id) : 0;
+      if (!there && !here) return;
+      const where = c.location === 'abroad' ? placeOf(s, c.id) : 'Rome';
+      // Gossip runs ahead of the letter: traders and soldiers on leave.
+      if (there) emit(s, 'news', { text: `Men off a ship from ${where} say ${shortName(c)} is dead.`, truth: 'unconfirmed', delay: Math.round(there * 0.6), about: [c.id] });
+      if (cares(s, pl.id, c.id)) {
+        const days = there + here;
+        emit(s, 'event.trigger', { eventId: 'letter_death', roles: { dead: c.id }, vars: { from: where, days, cause: e.cause }, delay: days });
+      } else if (there) emit(s, 'news', { text: `A letter from ${where}: ${shortName(c)} has died (${e.cause}).`, truth: 'true', delay: there, about: [c.id] });
+    });
     on('gossip.hear', (s) => hear(s));
     on('hook', (s, e) => {
       if (e.name === 'hear_gossip') hear(s);
@@ -50,6 +67,12 @@ export const news: SystemDef = {
   },
   daily(s) {
     if (playerHearsToday(s)) hear(s);
+    // Abroad, Rome's news comes in the letters of friends, weeks late.
+    const pl = s.chars[s.playerId];
+    if (pl.alive && pl.location === 'abroad') {
+      const lag = awayDays(s, pl.id);
+      for (const g of s.news.items) if (!g.heard && g.day + lag <= s.day) g.heard = true;
+    }
   },
   monthly(s) {
     // Idle talk: a rumor or two each month, true or not.
@@ -64,6 +87,29 @@ export const news: SystemDef = {
     emit(s, 'news', { text: renderText(s, r.text, sc), truth: isTrue ? 'true' : 'false', about: [a.id] });
   },
 };
+
+/** Where a man abroad is, in words. */
+function placeOf(s: GameState, id: string): string {
+  const g = s.offices.governors.find((x) => x.who === id && !x.returned);
+  return g ? PROVINCES.find((p) => p.id === g.province)?.label ?? 'abroad' : 'the army';
+}
+
+/** Days a letter takes between Rome and where this man is. */
+export function awayDays(s: GameState, id: string): number {
+  const g = s.offices.governors.find((x) => x.who === id && !x.returned);
+  return g ? PROVINCES.find((p) => p.id === g.province)?.letterDays ?? 20 : 20;
+}
+
+/** Does the player care enough about this man to be written to when he dies? */
+function cares(s: GameState, me: string, other: string): boolean {
+  const a = s.chars[me];
+  const b = s.chars[other];
+  if (!a || !b) return false;
+  if (a.patronId === b.id || b.patronId === a.id) return true;
+  if (a.familyId && a.familyId === b.familyId) return true;
+  if (b.fatherId === a.id || a.fatherId === b.id || a.spouseId === b.id) return true;
+  return hasTie(s, me, other, 'amicus') || hasTie(s, me, other, 'kin') || favorBalance(s, other, me) > 0;
+}
 
 function hear(s: GameState) {
   for (const g of s.news.items) if (!g.heard && g.day <= s.day) g.heard = true;

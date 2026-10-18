@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { CAMPAIGNS, CANVASS_ZONES, type CanvassZone } from '../content/offices';
 import { PLACES } from '../content/places';
-import { PROVINCES } from '../content/offices';
 import { checkAction, getAction } from '../sim/core';
 import { availableIssues, bankers, creditLimit } from '../sim/systems/city';
-import { playerCase } from '../sim/systems/courts/api';
+import { playerCase, chargeLabel } from '../sim/systems/courts/api';
 import { cashOf, loansOwedBy } from '../sim/systems/money/api';
 import { opinion } from '../sim/systems/network/api';
 import { campaignOpen } from '../sim/systems/offices';
@@ -149,7 +148,7 @@ function Forum({ s }: { s: GameState }) {
       {open.map((c) => (
         <ActionRow key={c.id} s={s} id="prosecute" params={{ caseId: c.id }} label={`Prosecute ${shortName(s.chars[c.defendant])}`}>
           <div className="small">
-            Late governor of {PROVINCES.find((p) => p.id === c.province)?.label}. The envoys claim {fmtHS(c.extorted)}. <Name s={s} id={c.defendant} /> · dignitas {standingOf(s, c.defendant, 'dignitas').total}
+            Charged with {chargeLabel(c)}. {c.charge === 'ambitus' ? 'Said to have paid out' : 'The envoys claim'} {fmtHS(c.extorted)}. <Name s={s} id={c.defendant} /> · dignitas {standingOf(s, c.defendant, 'dignitas').total}
           </div>
           <div className="small muted">The envoys’ case looks {c.evidence > 0.7 ? 'strong' : c.evidence > 0.45 ? 'arguable' : 'thin'}. Juries are drawn from the {c.juryClass === 'senator' ? 'Senate' : 'equites'}.</div>
         </ActionRow>

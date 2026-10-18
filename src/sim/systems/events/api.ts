@@ -3,8 +3,10 @@
 import { EVENTS as HISTORY } from '../../../content/events';
 import { OPPORTUNITIES } from '../../../content/opportunities';
 import { FAMILY_EVENTS } from '../../../content/family';
+import { CAREER_EVENTS } from '../../../content/career';
+import { HISTORY_120_100 } from '../../../content/history2';
 
-const EVENTS = [...HISTORY, ...OPPORTUNITIES, ...FAMILY_EVENTS];
+const EVENTS = [...HISTORY, ...OPPORTUNITIES, ...FAMILY_EVENTS, ...CAREER_EVENTS, ...HISTORY_120_100];
 import { evalCond, evalNum, groupMembers, renderSegs, resolve, withRole, type Cond, type Effect, type Group, type NumExpr, type Ref, type Scope, type TextSeg } from '../../dsl';
 import type { Breakdown, CharId, GameState, PendingEvent } from '../../types';
 import { clamp } from '../../util';

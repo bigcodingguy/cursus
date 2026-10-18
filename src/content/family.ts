@@ -8,6 +8,7 @@ export const FAMILY_EVENTS: EventDef[] = [
   {
     id: 'succession',
     title: 'The family goes on',
+    cooldown: 0,
     player: true,
     text: [
       '{dead} is dead, at {var:age}. They carry him out with the masks of his ancestors walking before the bier, and his son speaks the eulogy from the Rostra.',
@@ -20,6 +21,7 @@ export const FAMILY_EVENTS: EventDef[] = [
   {
     id: 'family_consul',
     hook: 'family_consul',
+    cooldown: 0,
     title: 'A mask in the atrium',
     player: true,
     text: [

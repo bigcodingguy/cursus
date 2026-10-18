@@ -5,11 +5,12 @@ import { emit, on } from '../../bus';
 import { registerAction, registerCommand, type SystemDef } from '../../core';
 import { chance, gauss, rand } from '../../rng';
 import type { Case, CasePrep, Character, CharId, GameState, Juror, Strategy } from '../../types';
-import { allChars, ageOf, clamp, fmtHS, fullName, shortName, sigmoid } from '../../util';
+import { allChars, ageOf, clamp, fmtHS, fullName, shortName, sigmoid, yearBC } from '../../util';
+import { holdsOffice } from '../offices/api';
 import { cashOf } from '../money/api';
 import { hasTie, opinion, tiesOf } from '../network/api';
 import { standingOf } from '../standing/api';
-import { caseById, jurorLogits, MOOD_POINTS, MOOD_SIGMA, npcMix, playerCase, roundSwing, STRATEGIES } from './api';
+import { caseById, chargeLabel, jurorLogits, MOOD_POINTS, MOOD_SIGMA, npcMix, playerCase, roundSwing, STRATEGIES } from './api';
 
 const JURY_SIZE = 32;
 const NAMED_JURORS = 14;
@@ -47,15 +48,19 @@ function drawJury(s: GameState, c: Case): Juror[] {
   return jury;
 }
 
-function openCase(s: GameState, who: CharId, province: string, extorted: number) {
+function openCase(s: GameState, who: CharId, province: string, extorted: number, charge: 'repetundae' | 'ambitus' = 'repetundae') {
   const id = `case${s.courts.nextCaseId++}`;
-  const evidence = clamp(0.3 + 0.45 * Math.min(1, extorted / 1500000) + 0.12 * gauss(s.rng), 0.1, 0.95);
+  const evidence = charge === 'ambitus'
+    ? clamp(0.25 + 0.4 * Math.min(1, extorted / 150000) + 0.12 * gauss(s.rng), 0.1, 0.9)
+    : clamp(0.3 + 0.45 * Math.min(1, extorted / 1500000) + 0.12 * gauss(s.rng), 0.1, 0.95);
   s.courts.cases.push({
-    id, defendant: who, province, extorted, evidence, openedDay: s.day, expiresDay: s.day + 365, status: 'open',
+    id, charge, defendant: who, province, extorted, evidence, openedDay: s.day, expiresDay: s.day + 365, status: 'open',
     prosecutionPrep: emptyPrep(), defensePrep: emptyPrep(), jury: [], rounds: [], sway: 0,
     juryClass: s.laws.repetundaeJury === 'equites' ? 'eques' : 'senator',
   });
-  emit(s, 'news', { text: `Envoys from ${provinceLabel(province)} have come to Rome. They say ${shortName(s.chars[who])} robbed them, and they are looking for a patron to prosecute.`, truth: 'true', delay: 2, about: [who] });
+  if (charge === 'ambitus') emit(s, 'news', { text: `Men in the tribes say ${shortName(s.chars[who])} bought his election, and they can name the agents who paid.`, truth: 'true', delay: 2, about: [who] });
+  else emit(s, 'news', { text: `Envoys from ${provinceLabel(province)} have come to Rome. They say ${shortName(s.chars[who])} robbed them, and they are looking for a patron to prosecute.`, truth: 'true', delay: 2, about: [who] });
+  if (who === s.playerId) emit(s, 'event.trigger', { eventId: 'charges_coming', roles: {}, vars: { charge: chargeLabel(s.courts.cases[s.courts.cases.length - 1]) } });
 }
 
 function beginProsecution(s: GameState, c: Case, prosecutor: Character) {
@@ -70,8 +75,13 @@ function beginProsecution(s: GameState, c: Case, prosecutor: Character) {
     if (x.familyId && x.familyId === def.familyId) emit(s, 'memory', { owner: x.id, about: prosecutor.id, act: 'Prosecuted my kinsman', weight: -20, halfLife: 3000 });
   }
   for (const t of tiesOf(s, def.id)) if (t.kind === 'amicus' && t.other !== prosecutor.id) emit(s, 'memory', { owner: t.other, about: prosecutor.id, act: 'Prosecuted my friend', weight: -15, halfLife: 2000 });
-  emit(s, 'log', { text: `${fullName(prosecutor)} brings a charge of extortion against ${fullName(def)}, late governor of ${provinceLabel(c.province)}.`, kind: 'court', about: [prosecutor.id, def.id] });
-  emit(s, 'news', { text: `${shortName(prosecutor)} is prosecuting ${shortName(def)} for extortion. The trial is set for forty days from now.`, truth: 'true', delay: 0, about: [prosecutor.id, def.id] });
+  emit(s, 'log', { text: `${fullName(prosecutor)} charges ${fullName(def)} with ${chargeLabel(c)}.`, kind: 'court', about: [prosecutor.id, def.id] });
+  emit(s, 'news', { text: `${shortName(prosecutor)} is prosecuting ${shortName(def)} for ${c.charge === 'ambitus' ? 'bribery' : 'extortion'}. The trial is set for forty days from now.`, truth: 'true', delay: 0, about: [prosecutor.id, def.id] });
+  // A praetor presides over the court, and may tilt it.
+  const pl = s.chars[s.playerId];
+  if (holdsOffice(s, pl.id, 'praetor') && pl.alive && pl.location === 'rome' && def.id !== pl.id && prosecutor.id !== pl.id) {
+    emit(s, 'event.trigger', { eventId: 'praetor_presides', roles: { defendant: def.id, prosecutor: prosecutor.id }, vars: { caseId: c.id, charge: chargeLabel(c) } });
+  }
   emit(s, 'trial.opened', { caseId: c.id, prosecutor: prosecutor.id, defendant: def.id });
   emit(s, 'hook', { name: 'case_opened', roles: { prosecutor: prosecutor.id, defendant: def.id }, vars: { province: provinceLabel(c.province), caseId: c.id } });
 }
@@ -79,6 +89,19 @@ function beginProsecution(s: GameState, c: Case, prosecutor: Character) {
 function chooseDefender(s: GameState, c: Case) {
   const def = s.chars[c.defendant];
   const pros = c.prosecutor!;
+  if (def.id === s.playerId) {
+    // You conduct your own defense; the best-disposed orator among your friends joins you.
+    c.defender = def.id;
+    const friend = allChars(s)
+      .filter((x) => x.alive && !x.female && x.location === 'rome' && x.id !== def.id && x.id !== pros && ageOf(s, x) >= 20 && opinion(s, x.id, def.id).total >= 20)
+      .sort((a, b) => b.oratory + opinion(s, b.id, def.id).total * 0.3 - (a.oratory + opinion(s, a.id, def.id).total * 0.3))[0];
+    if (friend) {
+      c.defensePrep.coCounsel = friend.id;
+      emit(s, 'log', { text: `${fullName(friend)} will speak with you in your defense.`, kind: 'court', about: [friend.id] });
+    }
+    c.jury = c.jury.filter((j) => j.charId !== friend?.id);
+    return;
+  }
   const cands = allChars(s).filter((x) => x.alive && !x.female && x.location === 'rome' && x.id !== pros && x.id !== def.id && ageOf(s, x) >= 20 && !hasTie(s, x.id, pros, 'kin'));
   let best: Character | undefined;
   let bestV = -Infinity;
@@ -169,22 +192,24 @@ function verdict(s: GameState, c: Case) {
   const pros = s.chars[c.prosecutor!];
   const defender = c.defender && c.defender !== def.id ? s.chars[c.defender] : undefined;
   if (c.verdict === 'convicted') {
-    const mult = Number(s.laws.repetundaeMultiplier ?? 1);
+    const mult = c.charge === 'ambitus' ? 1 : Number(s.laws.repetundaeMultiplier ?? 1);
     const owed = c.extorted * mult;
+    if (c.charge === 'ambitus') emit(s, 'charFlag', { who: def.id, key: 'barredUntil', value: yearBC(s) - 10 });
     const paid = Math.min(owed, Math.max(0, cashOf(s, def.id)));
-    emit(s, 'transfer', { from: def.id, to: null, amount: paid, reason: 'restitution to provincials' });
-    emit(s, 'standing', { who: def.id, kind: 'dignitas', value: -20, label: 'Convicted of extortion', halfLife: 0 });
-    emit(s, 'standing', { who: def.id, kind: 'boni', value: -10, label: 'Convicted of extortion' });
+    emit(s, 'transfer', { from: def.id, to: null, amount: paid, reason: c.charge === 'ambitus' ? 'fine for bribery' : 'restitution to provincials' });
+    const what = c.charge === 'ambitus' ? 'bribery' : 'extortion';
+    emit(s, 'standing', { who: def.id, kind: 'dignitas', value: -20, label: `Convicted of ${what}`, halfLife: 0 });
+    emit(s, 'standing', { who: def.id, kind: 'boni', value: -10, label: `Convicted of ${what}` });
     // The first great conviction makes a name; later ones add less.
     const prior = pros.flags.convictions ?? 0;
     emit(s, 'charFlag', { who: pros.id, key: 'convictions', value: prior + 1 });
-    emit(s, 'standing', { who: pros.id, kind: 'dignitas', value: prior === 0 ? 7 : prior < 3 ? 3 : 1, label: `Convicted ${shortName(def)} of extortion`, halfLife: 0 });
+    emit(s, 'standing', { who: pros.id, kind: 'dignitas', value: prior === 0 ? 7 : prior < 3 ? 3 : 1, label: `Convicted ${shortName(def)} of ${what}`, halfLife: 0 });
     emit(s, 'standing', { who: pros.id, kind: 'people', value: 12, label: 'Won a famous prosecution' });
     if (def.lean > 0.3) emit(s, 'standing', { who: pros.id, kind: 'boni', value: -4, label: 'Brought down one of the boni' });
     emit(s, 'memory', { owner: def.id, about: pros.id, act: 'Had me convicted', weight: -30, halfLife: 0 });
     if (defender) emit(s, 'standing', { who: defender.id, kind: 'dignitas', value: -2, label: 'Lost a defense', halfLife: 1500 });
-    const exile = paid < owed || chance(s.rng, 0.4);
-    emit(s, 'log', { text: `${fullName(def)} is convicted, ${convict} votes to ${acquit}, and ordered to repay ${fmtHS(owed)}.`, kind: 'court', about: [def.id, pros.id] });
+    const exile = paid < owed || chance(s.rng, c.charge === 'ambitus' ? 0.2 : 0.4);
+    emit(s, 'log', { text: `${fullName(def)} is convicted, ${convict} votes to ${acquit}, and ordered to ${c.charge === 'ambitus' ? 'pay' : 'repay'} ${fmtHS(owed)}${c.charge === 'ambitus' ? ' and barred from office for ten years' : ''}.`, kind: 'court', about: [def.id, pros.id] });
     if (exile) emit(s, 'exile', { who: def.id, reason: 'after his conviction for extortion' });
   } else {
     emit(s, 'standing', { who: pros.id, kind: 'dignitas', value: -1, label: 'Lost a prosecution', halfLife: 1500 });
@@ -265,6 +290,22 @@ export const courts: SystemDef = {
       for (const c of s.courts.cases) if (c.status === 'open' && c.defendant === e.who) c.status = 'closed';
     });
     on('hook', (s, e) => {
+      if (e.name === 'ambitus_case' && e.roles.defendant) {
+        openCase(s, e.roles.defendant, String(e.vars?.office ?? 'quaestor'), Number(e.vars?.amount ?? 0), 'ambitus');
+        return;
+      }
+      if (e.name === 'preside_defense' || e.name === 'preside_prosecution') {
+        const c = caseById(s, String(e.vars?.caseId));
+        if (!c || c.status === 'closed') return;
+        const dir = e.name === 'preside_prosecution' ? 1 : -1;
+        c.sway += 0.3 * dir;
+        const helped = dir > 0 ? c.prosecutor! : c.defendant;
+        const hurt = dir > 0 ? c.defendant : c.prosecutor!;
+        emit(s, 'memory', { owner: helped, about: s.playerId, act: 'Leaned the court my way', weight: 15, halfLife: 3000 });
+        emit(s, 'memory', { owner: hurt, about: s.playerId, act: 'Presided against me', weight: -25, halfLife: 3000 });
+        emit(s, 'standing', { who: s.playerId, kind: 'dignitas', value: -2, label: 'A partial praetor', halfLife: 1500 });
+        return;
+      }
       if (e.name === 'join_counsel') {
         const lead = e.roles.lead;
         const c = s.courts.cases.find((x) => x.status === 'prep' && (x.prosecutor === lead || x.defender === lead));

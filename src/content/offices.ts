@@ -89,38 +89,66 @@ export interface ProvinceDef {
   label: string;
   fromBC: number; // first year it has a governor
   richness: number; // multiplier on what can be squeezed out of it
+  /** Days a letter takes to reach Rome. */
+  letterDays: number;
+  /** A war command given to a consul, not an ordinary province. */
+  war?: boolean;
 }
 export const PROVINCES: ProvinceDef[] = [
-  { id: 'sicilia', label: 'Sicily', fromBC: 227, richness: 1.0 },
-  { id: 'sardinia', label: 'Sardinia', fromBC: 227, richness: 0.6 },
-  { id: 'hisp_cit', label: 'Nearer Spain', fromBC: 197, richness: 0.8 },
-  { id: 'hisp_ult', label: 'Further Spain', fromBC: 197, richness: 0.9 },
-  { id: 'macedonia', label: 'Macedonia', fromBC: 146, richness: 1.0 },
-  { id: 'africa', label: 'Africa', fromBC: 146, richness: 0.9 },
-  { id: 'asia', label: 'Asia', fromBC: 129, richness: 1.8 },
+  { id: 'sicilia', label: 'Sicily', fromBC: 227, richness: 1.0, letterDays: 9 },
+  { id: 'sardinia', label: 'Sardinia', fromBC: 227, richness: 0.6, letterDays: 8 },
+  { id: 'hisp_cit', label: 'Nearer Spain', fromBC: 197, richness: 0.8, letterDays: 24 },
+  { id: 'hisp_ult', label: 'Further Spain', fromBC: 197, richness: 0.9, letterDays: 32 },
+  { id: 'macedonia', label: 'Macedonia', fromBC: 146, richness: 1.0, letterDays: 18 },
+  { id: 'africa', label: 'Africa', fromBC: 146, richness: 0.9, letterDays: 12 },
+  { id: 'asia', label: 'Asia', fromBC: 129, richness: 1.8, letterDays: 35 },
+  { id: 'gallia', label: 'Transalpine Gaul', fromBC: 120, richness: 0.6, letterDays: 20 },
+  { id: 'numidia', label: 'the war in Numidia', fromBC: 0, richness: 0.8, letterDays: 15, war: true },
 ];
 
 export interface FastiYear {
   consuls: string[]; // historical keys
   tribunes?: string[];
   praetors?: string[];
+  quaestors?: string[];
 }
 /** Historical magistrates. If a man is dead or disgraced, the sim fills the seat from the living. */
 export const FASTI: Record<number, FastiYear> = {
   133: { consuls: ['scaevola', 'piso'], tribunes: ['ti_gracchus', 'octavius'] },
   132: { consuls: ['laenas', 'rupilius'] },
   131: { consuls: ['crassus', 'flaccus_l'], tribunes: ['carbo'] },
-  130: { consuls: ['lentulus', 'perperna'] },
-  129: { consuls: ['tuditanus', 'aquillius'] },
-  128: { consuls: ['octavius_cn', 'annius'] },
-  127: { consuls: ['cassius', 'cinna'] },
-  126: { consuls: ['lepidus', 'orestes'] },
-  125: { consuls: ['hypsaeus', 'fulvius'], praetors: ['opimius'] },
-  124: { consuls: ['longinus', 'calvinus'] },
-  123: { consuls: ['metellus_q', 'flamininus'], tribunes: ['c_gracchus', 'rubrius'] },
-  122: { consuls: ['ahenobarbus', 'fannius'], tribunes: ['c_gracchus', 'drusus'] },
+  130: { consuls: ['lentulus', 'perperna'], quaestors: ['scaurus'] },
+  129: { consuls: ['tuditanus', 'aquillius'], quaestors: ['metellus_l'] },
+  128: { consuls: ['octavius_cn', 'annius'], quaestors: ['numidicus', 'rutilius'] },
+  127: { consuls: ['cassius', 'cinna'], quaestors: ['metellus_m', 'augur'] },
+  126: { consuls: ['lepidus', 'orestes'], quaestors: ['eburnus', 'drusus'] },
+  125: { consuls: ['hypsaeus', 'fulvius'], praetors: ['opimius'], quaestors: ['metellus_c', 'nasica_f'] },
+  124: { consuls: ['longinus', 'calvinus'], quaestors: ['carbo_cn', 'minucius'] },
+  123: { consuls: ['metellus_q', 'flamininus'], tribunes: ['c_gracchus', 'rubrius'], quaestors: ['bestia', 'albinus', 'marius'] },
+  122: { consuls: ['ahenobarbus', 'fannius'], tribunes: ['c_gracchus', 'drusus'], quaestors: ['silanus'] },
   121: { consuls: ['opimius', 'maximus'], tribunes: ['minucius'] },
-  120: { consuls: ['manilius', 'carbo'] },
+  120: { consuls: ['manilius', 'carbo'], praetors: ['metellus_l', 'augur'], quaestors: ['cassius_l'] },
+  // From here the record is a guide, not a script: men die, lose, or are beaten to it.
+  119: { consuls: ['cotta'], tribunes: ['marius'], praetors: ['eburnus', 'scaurus'], quaestors: ['mallius', 'fimbria', 'memmius'] },
+  118: { consuls: [], praetors: ['metellus_m', 'rutilius'], quaestors: ['caepio', 'catulus'] },
+  117: { consuls: ['metellus_l', 'augur'] },
+  116: { consuls: ['eburnus'], praetors: ['carbo_cn', 'metellus_c'] },
+  115: { consuls: ['scaurus', 'metellus_m'], praetors: ['marius', 'drusus'] },
+  114: { consuls: [], praetors: ['nasica_f', 'bestia'] },
+  113: { consuls: ['metellus_c', 'carbo_cn'], praetors: ['minucius', 'albinus'], quaestors: ['antonius'] },
+  112: { consuls: ['drusus'], praetors: ['numidicus', 'silanus'] },
+  111: { consuls: ['nasica_f', 'bestia'], tribunes: ['memmius'], praetors: ['cassius_l'] },
+  110: { consuls: ['minucius', 'albinus'], quaestors: ['crassus_o'] },
+  109: { consuls: ['numidicus', 'silanus'], tribunes: ['mamilius'], praetors: ['caepio', 'catulus'], quaestors: ['glaucia'] },
+  108: { consuls: [], praetors: ['mallius'] },
+  107: { consuls: ['marius', 'cassius_l'], praetors: ['fimbria'], quaestors: ['sulla'] },
+  106: { consuls: ['caepio'] },
+  105: { consuls: ['rutilius', 'mallius'] },
+  104: { consuls: ['marius', 'fimbria'], praetors: ['memmius'], quaestors: ['saturninus'] },
+  103: { consuls: ['marius'], tribunes: ['saturninus'] },
+  102: { consuls: ['marius', 'catulus'], praetors: ['antonius'] },
+  101: { consuls: ['marius'], tribunes: ['glaucia'] },
+  100: { consuls: ['marius'], tribunes: ['saturninus'], praetors: ['glaucia'] },
 };
 
 /** Historical governorships worth seeding (extortion trials grew out of exactly these). */
@@ -136,6 +164,9 @@ export interface CampaignDef {
   commander: string; // historical key or role
   risk: number; // chance of death over a season
   dignitas: number;
+  /** Only while this world flag is set (and `until`, if given, is not). */
+  flag?: string;
+  until?: string;
 }
 export const CAMPAIGNS: CampaignDef[] = [
   { id: 'numantia', label: 'the siege of Numantia', years: [133, 133], commander: 'aemilianus', risk: 0.04, dignitas: 5 },
@@ -145,5 +176,9 @@ export const CAMPAIGNS: CampaignDef[] = [
   { id: 'sardinia', label: 'the garrison of Sardinia', years: [126, 123], commander: 'orestes', risk: 0.03, dignitas: 3 },
   { id: 'gaul', label: 'the war beyond the Alps', years: [125, 120], commander: 'fulvius', risk: 0.05, dignitas: 5 },
   { id: 'baleares', label: 'the war against the Balearic pirates', years: [123, 122], commander: 'metellus_q', risk: 0.04, dignitas: 4 },
-  { id: 'spain', label: 'garrison duty in Spain', years: [133, 120], commander: '', risk: 0.03, dignitas: 3 },
+  { id: 'spain', label: 'garrison duty in Spain', years: [133, 100], commander: '', risk: 0.03, dignitas: 3 },
+  { id: 'dalmatia', label: 'the war in Dalmatia', years: [119, 118], commander: 'metellus_l', risk: 0.04, dignitas: 4 },
+  { id: 'scordisci', label: 'the war with the Scordisci in Macedonia', years: [114, 110], commander: 'minucius', risk: 0.05, dignitas: 4 },
+  { id: 'numidia', label: 'the war against Jugurtha', years: [111, 105], commander: '', risk: 0.05, dignitas: 6, flag: 'numidian_war', until: 'jugurtha_captured' },
+  { id: 'cimbri', label: 'the war against the Cimbri and Teutones', years: [105, 101], commander: 'marius', risk: 0.06, dignitas: 7, flag: 'arausio', until: 'cimbri_beaten' },
 ];

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { PROVINCES } from '../content/offices';
-import { ROUND_NAMES, STRATEGIES, convictionChance, optionOdds, playerCase } from '../sim/systems/courts/api';
+import { ROUND_NAMES, STRATEGIES, convictionChance, optionOdds, playerCase, chargeLabel } from '../sim/systems/courts/api';
 import { eventDef, eventText, visibleChoices } from '../sim/systems/events/api';
 import { candidacyOf, openElection, voteGap, winChance } from '../sim/systems/offices/api';
 import type { GameState } from '../sim/types';
@@ -81,7 +80,7 @@ export function TrialModal({ s }: { s: GameState }) {
         <div className="date">{dateLine(s)}</div>
         <p>
           In the Forum, before the praetor’s tribunal. {c.jury.filter((j) => !j.rejected).length} {c.juryClass === 'senator' ? 'senators' : 'equites'} sit as jurors. You speak for the {side}. Opposing you: <Name s={s} id={opp} />
-          {opp === c.defendant ? ' (speaking for himself)' : ''}. The charge: extortion in {PROVINCES.find((x) => x.id === c.province)?.label}.
+          {opp === c.defendant ? ' (speaking for himself)' : ''}. The charge: {chargeLabel(c)}.
         </p>
         <div className="card green">
           If the jurors voted now: <Odds p={now} /> chance the verdict goes your way.

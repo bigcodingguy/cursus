@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { OFFICES, PROVINCES } from '../content/offices';
+import { OFFICES } from '../content/offices';
 import { dateOf } from '../sim/calendar';
-import { convictionChance, evidenceTerm, jurorLean, playerCase } from '../sim/systems/courts/api';
+import { convictionChance, evidenceTerm, jurorLean, playerCase, chargeLabel } from '../sim/systems/courts/api';
 import { cashOf, debtOf, loansHeldBy, loansOwedBy } from '../sim/systems/money/api';
 import { favorBalance, favorsOwed, memoriesAbout, opinion, tiesOf } from '../sim/systems/network/api';
 import { ASK_LABELS, askBlocked, type Ask } from '../sim/systems/city';
@@ -404,7 +404,7 @@ export function CasePanel({ s }: { s: GameState }) {
     <div>
       <h2>{side === 'prosecution' ? 'Prosecuting' : 'Defending'} {shortName(s.chars[c.defendant])}</h2>
       <p className="small">
-        Charge: extortion as governor of {PROVINCES.find((x) => x.id === c.province)?.label} ({fmtHS(c.extorted)} claimed). Prosecutor <Name s={s} id={c.prosecutor} />; defender{' '}
+        Charge: {chargeLabel(c)} ({fmtHS(c.extorted)} claimed). Prosecutor <Name s={s} id={c.prosecutor} />; defender{' '}
         {c.defender ? <Name s={s} id={c.defender} /> : <span className="muted">not yet chosen</span>}. Jury of {c.jury.filter((j) => !j.rejected).length} {c.juryClass === 'senator' ? 'senators' : 'equites'}. Trial on <b>{shortDate(c.trialDay!)}</b>.
       </p>
       <div className="card green">

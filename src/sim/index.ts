@@ -13,9 +13,10 @@ import { events } from './systems/events';
 import { news } from './systems/news';
 import { city } from './systems/city';
 import { agents } from './systems/agents';
+import { assembly } from './systems/assembly';
 
 export function installAll(): void {
-  installSystems([people, network, money, family, standing, offices, courts, crisis, events, news, city, agents]);
+  installSystems([people, network, money, family, standing, offices, courts, crisis, events, news, city, assembly, agents]);
 }
 
 export { advance, blockedBy, command, tick } from './core';

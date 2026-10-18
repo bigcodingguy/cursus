@@ -8,10 +8,10 @@ import { dateOf, dayOf } from '../../calendar';
 import { registerAction, registerCommand, type SystemDef } from '../../core';
 import { chance, fork, gauss, pick, rand, randInt } from '../../rng';
 import type { Character, CharId, Election, GameState, OfficeId } from '../../types';
-import { allChars, ageOf, byHistorical, clamp, fullName, shortName, yearBC } from '../../util';
+import { allChars, ageOf, breakdown, byHistorical, clamp, fullName, shortName, yearBC } from '../../util';
 import { cashOf } from '../money/api';
 import { standingOf } from '../standing/api';
-import { assemblyOf, candidacyOf, electionFor, electionOfCandidate, expectedBy, FORECAST_RUNS, forecastRuns, ineligibleFor, openElections, profiles, quaestorIneligible, voteOnce } from './api';
+import { assemblyOf, candidacyOf, heldEver, electionFor, electionOfCandidate, expectedBy, FORECAST_RUNS, forecastRuns, ineligibleFor, openElections, profiles, quaestorIneligible, voteOnce } from './api';
 
 
 function record(s: GameState, who: CharId, office: OfficeId, y: number) {
@@ -80,14 +80,15 @@ function declare(s: GameState, who: CharId, office: OfficeId) {
 
 /** How much a man wants an office this year. History's men want theirs badly. */
 function urgeFor(s: GameState, a: Character, e: Election): number {
-  if (expectedBy(a, e.office, e.forYearBC)) return 9;
+  if (expectedBy(s, a, e.office, e.forYearBC)) return 9;
   const dig = standingOf(s, a.id, 'dignitas').total;
   const age = a.bornBC - e.forYearBC;
   switch (e.office) {
     case 'quaestor':
       return a.traits.ambition * (age >= 30 ? 1.5 : 1) + (a.historical ? 0.3 : 0) + 0.002 * dig;
     case 'tribune_pleb':
-      return Math.abs(a.lean) > 0.4 ? a.traits.boldness * 0.9 + a.traits.ambition * 0.3 : 0.2;
+      // Standing again for the tribunate was legal but rare, and looked like a bid for tyranny.
+      return (Math.abs(a.lean) > 0.4 ? a.traits.boldness * 0.9 + a.traits.ambition * 0.3 : 0.2) * (heldEver(s, a.id, 'tribune_pleb') ? 0.25 : 1);
     case 'aedile':
       return cashOf(s, a.id) > 60000 ? a.traits.ambition * 0.8 : 0.2;
     case 'praetor':
@@ -187,6 +188,39 @@ function resolveElection(s: GameState, e: Election, playerSaw?: number) {
 export const offices: SystemDef = {
   id: 'offices',
   register() {
+    // The player's choices in office, made through content events.
+    on('hook', (s, e) => {
+      const pl = s.chars[s.playerId];
+      const greed: Record<string, number> = { govern_light: 0.2, govern_usual: 0.5, govern_hard: 0.85, command_go: 0.35 };
+      if (e.name in greed && e.vars?.province) {
+        sendGovernor(s, pl, String(e.vars.province), 1, greed[e.name]);
+        pl.flags.governing = 1;
+        return;
+      }
+      if (e.name === 'governor_take') {
+        const g = s.offices.governors.find((x) => x.who === pl.id && !x.returned);
+        if (g) g.taken = (g.taken ?? 0) + Number(e.vars?.amount ?? 0);
+        return;
+      }
+      if (e.name === 'censor_expel' && e.roles.enemy) {
+        const c = s.chars[e.roles.enemy];
+        if (!c?.alive || c.rank !== 'senator') return;
+        c.rank = 'eques';
+        c.flags.expelled = yearBC(s);
+        emit(s, 'memory', { owner: c.id, about: pl.id, act: 'Struck me from the Senate', weight: -70, halfLife: 0 });
+        emit(s, 'tie', { a: c.id, b: pl.id, kind: 'inimicus' });
+        emit(s, 'log', { text: `The censors strike ${fullName(c)} from the roll of the Senate.`, kind: 'player', about: [c.id] });
+        return;
+      }
+      if (e.name === 'censor_enroll' && e.roles.client) {
+        const c = s.chars[e.roles.client];
+        if (!c?.alive || c.rank === 'senator') return;
+        c.rank = 'senator';
+        emit(s, 'favor', { debtor: c.id, creditor: pl.id, weight: 4, reason: 'Enrolled me in the Senate' });
+        emit(s, 'log', { text: `The censors enroll ${fullName(c)} in the Senate.`, kind: 'player', about: [c.id] });
+      }
+    });
+
     on('office.won', (s, e) => {
       s.offices.records.push({ who: e.who, office: e.office, yearBC: e.yearBC });
       const def = OFFICES[e.office];
@@ -234,7 +268,7 @@ export const offices: SystemDef = {
         for (const e of openElections(s)) {
           if (s.day > e.professioDeadline || ineligibleFor(s, a, e.office, e.forYearBC)) continue;
           // A man history marks for one office that year keeps himself free for it.
-          if (a.historical && !expectedBy(a, e.office, e.forYearBC) && (['consul', 'tribune_pleb', 'praetor'] as OfficeId[]).some((o) => expectedBy(a, o, e.forYearBC))) continue;
+          if (a.historical && !expectedBy(s, a, e.office, e.forYearBC) && (['consul', 'tribune_pleb', 'praetor'] as OfficeId[]).some((o) => expectedBy(s, a, o, e.forYearBC))) continue;
           const urge = urgeFor(s, a, e);
           out.push({ params: { office: e.office }, utility: urge > 0.75 ? 5 + Math.min(4, urge) : 0.5 });
         }
@@ -370,6 +404,10 @@ export const offices: SystemDef = {
           if (c.id === s.playerId) emit(s, 'log', { text: 'You take office and your name is entered among the senators.', kind: 'player' });
         }
       }
+      if (r.yearBC === y && r.who === s.playerId && s.chars[r.who]?.alive) {
+        emit(s, 'office.start', { who: r.who, office: r.office, yearBC: y });
+        emit(s, 'hook', { name: `office_start_${r.office}`, roles: { holder: r.who }, vars: {} });
+      }
     }
   },
 
@@ -394,7 +432,8 @@ export const offices: SystemDef = {
         if (!c?.alive) continue;
         if (c.location === 'abroad') c.location = 'rome';
         emit(s, 'transfer', { from: null, to: g.who, amount: g.extorted, reason: 'provincial spoils' });
-        emit(s, 'governor.returned', { who: g.who, province: g.province, extorted: g.extorted });
+        if (c.id === s.playerId) delete c.flags.governing;
+        emit(s, 'governor.returned', { who: g.who, province: g.province, extorted: g.extorted + (g.taken ?? 0) });
       }
     }
     for (const e of openElections(s)) {
@@ -435,6 +474,8 @@ export function campaignOpen(s: GameState, id: string): boolean {
   if (!c) return false;
   const y = yearBC(s);
   if (y > c.years[0] || y < c.years[1]) return false;
+  if (c.flag && !s.flags[c.flag]) return false;
+  if (c.until && s.flags[c.until]) return false;
   if (!c.commander) return true;
   const cmd = byHistorical(s, c.commander);
   return !!cmd?.alive;
@@ -450,16 +491,49 @@ function departGovernors(s: GameState, y: number) {
     sendGovernor(s, c, h.province, years, h.greed);
   }
   const busy = new Set(s.offices.governors.filter((g) => !g.returned).map((g) => g.province));
-  const free = PROVINCES.filter((p) => p.fromBC >= y && !busy.has(p.id));
+  const free = PROVINCES.filter((p) => !p.war && p.fromBC >= y && !busy.has(p.id));
   const pool = s.offices.records
     .filter((r) => r.yearBC === y + 1 && (r.office === 'praetor' || r.office === 'consul'))
     .map((r) => s.chars[r.who])
     .filter((c) => c?.alive && c.location === 'rome' && c.id !== s.playerId && !s.offices.governors.some((g) => g.who === c.id && !g.returned));
+  // The player, if he held a praetorship or consulship last year, is offered a province.
+  const pl = s.chars[s.playerId];
+  const mine = s.offices.records.find((r) => r.who === pl.id && r.yearBC === y + 1 && (r.office === 'praetor' || r.office === 'consul'));
+  if (mine && pl.alive && pl.location === 'rome' && free.length && !s.offices.governors.some((g) => g.who === pl.id && !g.returned)) {
+    const war = mine.office === 'consul' ? warProvince(s) : undefined;
+    const p = war ?? free.splice(Math.floor(rand(s.rng) * free.length), 1)[0];
+    emit(s, 'event.trigger', { eventId: war ? 'command_offer' : 'province_offer', roles: {}, vars: { province: p.id, provinceLabel: p.label, war: war ? 1 : 0, winChance: war ? Math.round(commandOdds(s, pl) * 100) : 0 } });
+  }
   for (const c of pool) {
     if (!free.length) break;
     const p = free.splice(Math.floor(rand(s.rng) * free.length), 1)[0];
     sendGovernor(s, c, p.id, chance(s.rng, 0.35) ? 2 : 1, c.traits.greed);
   }
+}
+
+/** A consul may be sent to the war that is going badly, if there is one. */
+function warProvince(s: GameState) {
+  if (s.flags.numidian_war && !s.flags.jugurtha_captured && !s.flags.marius_africa) return PROVINCES.find((p) => p.id === 'numidia');
+  if (s.flags.cimbri && !s.flags.cimbri_beaten) return PROVINCES.find((p) => p.id === 'gallia');
+  return undefined;
+}
+
+/** The chance a commander comes home victorious from a season's war. Shown to the player and used. */
+export function commandOdds(s: GameState, c: Character): number {
+  return commandBreakdown(s, c).total;
+}
+export function commandBreakdown(s: GameState, c: Character) {
+  return breakdown(
+    [
+      { label: 'Base', value: 0.45 },
+      { label: 'Campaigns served', value: Math.min(0.2, c.servedAbroad * 0.05) },
+      { label: 'His name with the soldiers (dignitas)', value: standingOf(s, c.id, 'dignitas').total / 400 },
+      { label: 'The new armies of the poor', value: s.flags.capite_censi ? 0.1 : 0 },
+      { label: 'An enemy that has beaten consular armies', value: s.flags.arausio && !s.flags.cimbri_beaten ? -0.1 : 0 },
+    ],
+    0.1,
+    0.9,
+  );
 }
 
 function sendGovernor(s: GameState, c: Character, province: string, years: number, greed: number) {

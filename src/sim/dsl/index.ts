@@ -364,7 +364,7 @@ function applyEffect(s: GameState, e: Effect, sc: Scope): void {
       const id = idOf(s, r, sc);
       if (id) roles[k] = id;
     }
-    return emit(s, 'event.trigger', { eventId: e.trigger, delay: e.delay, roles });
+    return emit(s, 'event.trigger', { eventId: e.trigger, delay: e.delay, roles, vars: sc.vars });
   }
   if ('travel' in e) {
     const who = idOf(s, e.travel, sc);

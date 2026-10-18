@@ -19,7 +19,9 @@ export const people: SystemDef = {
       c.alive = false;
       c.died = { day: s.day, cause: e.cause };
       c.action = undefined;
-      emit(s, 'log', { text: `${fullName(c)} has died (${e.cause}).`, kind: 'death', about: [c.id] });
+      // Deaths far from Rome, or while the player is away, reach him by letter (see the news system).
+      const far = c.location === 'abroad' || s.chars[s.playerId]?.location === 'abroad';
+      if (!far || c.id === s.playerId) emit(s, 'log', { text: `${fullName(c)} has died (${e.cause}).`, kind: 'death', about: [c.id] });
       emit(s, 'hook', { name: 'death', roles: { dead: c.id } });
       for (const o of allChars(s)) if (o.patronId === c.id) o.patronId = null;
       if (c.id === s.playerId) {
@@ -37,7 +39,9 @@ export const people: SystemDef = {
       c.flags.exiled = s.day;
       emit(s, 'log', { text: `${fullName(c)} goes into exile (${e.reason}).`, kind: 'world', about: [c.id] });
       if (c.id === s.playerId) {
-        s.ended = { day: s.day, reason: `You went into exile: ${e.reason}.` };
+        // A grown son carries on in Rome (see the family system); otherwise the story ends here.
+        const h = heirOf(s, c.id);
+        if (!h || ageOf(s, s.chars[h]) < 16) s.ended = { day: s.day, reason: `You went into exile: ${e.reason}.` };
         emit(s, 'pause', { reason: 'player exiled' });
       }
     });
