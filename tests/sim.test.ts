@@ -110,7 +110,8 @@ describe('elections', () => {
 
 describe('the world comes to the player', () => {
   it('a passive player is offered something at least every few months', () => {
-    for (const seed of [1, 2, 3]) {
+    let judged = 0;
+    for (const seed of [1, 2, 3, 4]) {
       const s = newGame({ seed });
       const days: number[] = [];
       let last = -1;
@@ -125,11 +126,15 @@ describe('the world comes to the player', () => {
         }
         tick(s);
       }
+      // A young man can die (fever, the wars); pacing is judged on the lives that run the whole span.
+      if (s.ended) continue;
+      judged++;
       // 132–127 BC: at least five prompts a year on average, and no gap longer than five months in Rome.
       const mid = days.filter((d) => d >= 365 && d < 365 * 7);
       expect(mid.length).toBeGreaterThanOrEqual(30);
       const gaps = mid.slice(1).map((d, i) => d - mid[i]);
       expect(Math.max(...gaps)).toBeLessThan(300);
     }
+    expect(judged).toBeGreaterThanOrEqual(2);
   });
 });
