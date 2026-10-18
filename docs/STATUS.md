@@ -1,6 +1,6 @@
 # Status
 
-_Updated 2026-10-18 — slice polish pass (from Claude’s playtest; Blake has not played yet)._
+_Updated 2026-10-18 — Phase 3a (a full life) done and deployed; 3b waits for Blake’s go._
 
 ## Where things stand
 
@@ -39,10 +39,20 @@ Acceptance moments verified (in bot runs and in my own UI playthrough):
 - **Person panel** for yourself: how Rome sees you, ambitions, family (father’s health, debts, letters), what men lately remember of you.
 - **Mortality** age-weighted with varied causes.
 
+## Phase 3a — a full life (2026-10-18)
+Authorized by Blake without playing first. The game now runs from 133 BC to the end of **100 BC**.
+- **Family and dynasty.** Marry (the bride’s guardian weighs your standing; a dowry comes with her and her family becomes your kin), divorce (dowry returned), adopt (a younger son of a house with sons to spare takes your name). Children are born to married couples and can die young; women can die in childbirth. Everyone ages and dies of age-weighted causes. Name your heir in the **Family** tab; on death you continue as him with the house’s money, debts, loans, favors, friendships and enmities, and men remember the father in the son. Each death of the line writes a Scipionic-style **elogium** in the tomb. A consulship puts a mask in the atrium and makes the house noble. Exile hands the house to a grown son. NPC houses marry, breed and adopt by the same actions.
+- **The full cursus.** Every magistracy is elected each July: tribal assembly for quaestor/tribune/aedile, centuriate (193 centuries by wealth) for praetor/consul/censor, with minimum ages, the order of offices, a year between, ten years between consulships, and a shown handicap for a new man seeking the consulship. Powers: tribunes and consuls **propose laws** and any tribune can **veto** (honest odds: each tribune’s veto chance, then the vote); speeches move the vote; vetoes are dangerous in violent years. **Aediles** give games (modest, generous, or borrowed and lavish). **Praetors** preside over every trial in their year and may tilt it. Ex-praetors and ex-consuls are offered **provinces** (light, usual or hard hand; a city’s “gift”), and consuls a **war command** with a shown chance of victory. **Censors** may strike an enemy from the Senate or enroll a client. Governors who squeezed their province, and winners who bought their votes (**ambitus**), can be prosecuted when they come home — including you, defending yourself.
+- **Letters.** A death in a far province, or any death while you are abroad, reaches you by letter weeks late (Sicily 9 days … Asia 35); gossip arrives first and may be wrong. Abroad, Rome’s news comes late.
+- **History to 100 BC** as ripening pressures (Numidia, the northern peoples), not a script: Micipsa’s death, Cirta, war with Jugurtha, the bought peace, “a city for sale”, Suthul, the Mamilian court (a law the people must pass), Metellus and Marius, the head count, Jugurtha’s capture, Noreia, Silanus, the Tigurini, the gold of Tolosa, Arausio (Marius may then be re-elected), Aquae Sextiae, Vercellae, Saturninus’s laws, the oath, Memmius murdered, the tiles of the Curia. 17 new historical men (Sulla, Saturninus, Glaucia, Memmius, Catulus, Caepio, Rutilius, Crassus the orator, Antonius, Jugurtha…), consuls and other magistrates from the record to 100 BC, new campaigns.
+- **UI.** Family and Laws tabs; the Elections tab covers every office (tribe-by-tribe or century-by-century); declare for any office you qualify for at the Campus; the right column shows one “Next” step (others on request) and the first-time note replaces it until dismissed; ambitions no longer repeat on your own card; Case and Elections tabs appear only when there is one.
+- Acceptance moments now possible: **3** (games debt and an equestrian’s loan for an unnamed vote, later called in), **5** (a letter from a province, weeks late), **6** (your daughter’s suitors), **8** (a client tribune vetoes your law in public), **10** (consul in the family; the mask goes up). Their frequency in bot runs is in `docs/balance.md`.
+
 ## How to verify
-- `npm test` — 14 tests (including: a passive player is offered something at least five times a year): RNG, calendar, jury odds (exact vs brute force; sampled verdicts match shown odds), whole-lifetime invariants for each bot strategy, determinism, save/load mid-game continuity, monthly invariant checks.
-- `npm run bots -- --runs 1000 --write` — refreshes `docs/balance.md` (~35 min on 4 cores).
+- `npm test` — 18 tests: RNG, calendar, jury odds (exact vs brute force; sampled verdicts match shown odds), whole 133–100 BC lifetimes with invariants for each bot strategy, determinism, save/load mid-game continuity, monthly invariant checks, passive-player pacing, law odds (parts sum to the shown chance; the bill is decided on its day), succession, exile to a grown son, late letters.
+- `npm run bots -- --runs 200 --write` — refreshes `docs/balance.md` (~45 min on 4 cores; a 33-year lifetime takes ~20 s headless). 1000 runs per strategy takes ~4 h.
 - Playthrough: I played 133–129 BC through the UI in headless Chromium (patron choice, the veto and deposition votes, the Capitol, service in Spain/Sicily, contio speeches, a prosecution with the creditor’s threat, trial, borrowing, Scipio’s death) and fixed what broke.
+- Phase 3a playthrough: 133 BC to spring 128 BC again through the UI (no console errors), plus saved games loaded at 108 BC (a consular candidate with a wife and the family tomb) to check the Family, Laws, Elections and Campus panels. Fixed on the way: an NPC could adopt the player; a dinner host listed as his own guest; office names in charges.
 
 ## Deploy
 - Live at https://bigcodingguy.github.io/cursus/ (GitHub Pages, deployed from `main` by `.github/workflows/deploy.yml`; the `github-pages` environment only accepts `main`).
@@ -50,10 +60,11 @@ Acceptance moments verified (in bot runs and in my own UI playthrough):
 
 ## Known issues / rough edges
 - Placeholder art throughout (by design until Phase 4).
-- The slice ends at the close of 120 BC; there is no heir system yet, so the player cannot die of natural causes (a deliberate slice rule) and a violent death ends the run.
-- Ambitus (bribery) builds a record (`flags.ambitus`) but there is no bribery court yet; it only costs boni favor now.
-- Balance: the establishment strategy wins the quaestorship most reliably; the tribal assembly weights the 31 country tribes, where the boni’s favor counts. Orator bots who defy their father’s creditor often see the family ruined. See `docs/balance.md`.
-- The bot runner takes ~2.5 s per lifetime; 3×1000 runs take ~35 minutes on 4 cores.
+- Bots default on a loan at least once in roughly a third of 33-year runs (they borrow whenever short and own no land to sell); real players can avoid it, but debt is harsher over a long career than in the slice.
+- Some moments are rare in bot runs: the daughter’s suitors (a daughter must come of age before 100 BC) and the client tribune’s veto (your client must be tribune while you carry a law). They can happen; bots don’t chase them.
+- Bots rarely carry laws; NPC magistrates do, and many popular bills die by veto. The Mamilian court passes in about a quarter of runs, and with it the condemnations of Bestia, Albinus and Opimius.
+- The heir is named in advance (Family tab), not chosen at the deathbed. Recall from exile is not modelled. Daughters can only be married through the suitors event, not by your own proposal.
+- History diverges: Marius’s run of consulships and the Cimbric victories need him elected; when he isn’t, the Cimbri stay a threat to 100 BC.
 
-## Next (Phase 3, after Blake has played this)
-Full cursus (aedile, tribune, praetor, consul), the 122 BC jury shift’s wider effects, family and heir succession, crisis clock into the 80s BC, news travel (letters), the Mediterranean map.
+## Next (Phase 3b, after Blake says go)
+The Mediterranean map; the crisis clock into the 80s BC (Social War, Sulla, proscriptions); the 122 BC jury shift as a lasting equites-vs-Senate fault line.
