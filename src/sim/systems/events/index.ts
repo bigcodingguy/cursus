@@ -1,6 +1,6 @@
 // Runs content events: daily conditions, hooks from other systems, delayed triggers, player choices.
 
-import { applyEffects, evalCond, evalNum, renderSegs } from '../../dsl';
+import { applyEffects, careerStage, evalCond, evalNum, renderSegs } from '../../dsl';
 import { emit, on } from '../../bus';
 import { registerCommand, type SystemDef } from '../../core';
 import { rand } from '../../rng';
@@ -36,7 +36,9 @@ const PACE_HAZARD = 0.07;
 function pace(s: GameState) {
   const pl = s.chars[s.playerId];
   if (s.events.pending.length || !pl.alive || pl.location !== 'rome' || s.ended) return;
-  if (s.day - s.events.lastPrompt < QUIET_DAYS || rand(s.rng) >= PACE_HAZARD) return;
+  // A man with a career has less idle time to fill: the quiet spell lengthens as he rises.
+  const quiet = { youth: QUIET_DAYS, junior: QUIET_DAYS + 10, senator: QUIET_DAYS + 30, elder: QUIET_DAYS + 45 }[careerStage(s, pl)];
+  if (s.day - s.events.lastPrompt < quiet || rand(s.rng) >= PACE_HAZARD) return;
   const options: { def: EventDef; roles: Record<string, CharId> }[] = [];
   for (const def of allEvents()) {
     if (def.pool !== 'opportunity' || !eligible(s, def)) continue;
@@ -46,7 +48,12 @@ function pace(s: GameState) {
     if (roles) options.push({ def, roles });
   }
   if (!options.length) return;
-  const o = options[Math.floor(rand(s.rng) * options.length)];
+  // Prefer what he has not seen lately: weight by days since the event last came (a new one counts as three years).
+  const w = options.map((o) => Math.min(1095, s.day - (s.events.fired[o.def.id] ?? -1095)));
+  let x = rand(s.rng) * w.reduce((a, b) => a + b, 0);
+  let k = 0;
+  while (k < options.length - 1 && (x -= w[k]) >= 0) k++;
+  const o = options[k];
   fire(s, o.def, o.roles, {});
 }
 

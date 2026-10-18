@@ -1,5 +1,6 @@
 // Holds the game outside React and drives the clock. All changes go through sim commands.
 
+import { getSave, listSaves, migrateOldSaves, putSave, type SlotMeta } from './persist';
 import { useSyncExternalStore } from 'react';
 import { installAll } from '../sim';
 import { blockedBy, command as simCommand, tick, type Command } from '../sim/core';
@@ -110,7 +111,7 @@ function frame(now: number) {
     if (n) {
       if (sinceSave >= 30) {
         sinceSave = 0;
-        saveSlot('auto');
+        void saveSlot('auto');
       }
       notify();
     }
@@ -120,40 +121,50 @@ function frame(now: number) {
 requestAnimationFrame(frame);
 
 // ---------------- saves ----------------
-const KEY = (slot: string) => `cursus.save.${slot}`;
+// Saves live in IndexedDB, gzip-compressed (see persist.ts). The slot list is cached for the UI.
+export const slots: { meta: Record<string, SlotMeta>; ready: boolean } = { meta: {}, ready: false };
+let queue: Promise<unknown> = Promise.resolve();
 
-export function saveSlot(slot: string): boolean {
-  if (!store.s) return false;
-  try {
-    localStorage.setItem(KEY(slot), serialize(store.s));
-    return true;
-  } catch {
-    return false;
-  }
+async function refreshSlots() {
+  const list = await listSaves();
+  slots.meta = Object.fromEntries(list.map((m) => [m.slot, m]));
+  slots.ready = true;
+  notify();
+}
+void migrateOldSaves().then(refreshSlots, refreshSlots);
+
+/** Save to a slot. Saves run one after another; resolves to null, or the reason it failed (also shown as a toast). */
+export function saveSlot(slot: string): Promise<string | null> {
+  if (!store.s) return Promise.resolve('No game to save');
+  // Serialize now, so the save is of this moment even if it waits its turn.
+  const day = store.s.day;
+  const json = serialize(store.s);
+  const job = queue.then(async () => {
+    const err = await putSave(slot, day, json);
+    if (err) toast(slot === 'auto' ? `Autosave failed: ${err}` : err);
+    await refreshSlots();
+    return err;
+  });
+  queue = job.catch(() => undefined);
+  return job;
 }
 
-export function loadSlot(slot: string): string | null {
+export async function loadSlot(slot: string): Promise<string | null> {
   try {
-    const t = localStorage.getItem(KEY(slot));
+    const t = await getSave(slot);
     if (!t) return 'Nothing saved there';
     store.s = deserialize(t);
     store.speed = 0;
     notify();
     return null;
   } catch (e) {
-    return String((e as Error).message ?? e);
+    return `Could not load: ${String((e as Error).message ?? e)}`;
   }
 }
 
 export function slotInfo(slot: string): string | null {
-  try {
-    const t = localStorage.getItem(KEY(slot));
-    if (!t) return null;
-    const s = (JSON.parse(t) as { state: GameState }).state;
-    return `${s.day}`;
-  } catch {
-    return null;
-  }
+  const m = slots.meta[slot];
+  return m ? `${m.day}` : null;
 }
 
 export function exportSave(): string | null {

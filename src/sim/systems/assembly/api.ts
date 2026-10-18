@@ -60,6 +60,8 @@ export function vetoChance(s: GameState, p: Proposal, t: Character): Breakdown {
     { label: 'A client does not lightly cross his patron', value: client ? -1.0 * (0.5 + t.traits.loyalty) : 0 },
     { label: 'Favors he owes the proposer', value: -0.3 * favorBalance(s, t.id, p.proposer) },
     { label: 'A veto is dangerous in violent times', value: s.crisis.stability < 45 ? -0.6 : 0 },
+    // Blocking what the crowd wants is costly (see veto()): few tribunes dare it alone.
+    { label: 'The people want this bill', value: -4 * Math.max(0, law.appeal - 0.55) },
   ];
   const logit = parts.reduce((a, x) => a + x.value, 0);
   return { total: sigmoid(logit), parts: [{ label: `Logit ${logit.toFixed(1)}`, value: 0 }, ...parts] };
@@ -82,7 +84,8 @@ export function voteChance(s: GameState, p: Proposal): Breakdown {
   const parts = [
     { label: 'How the bill sits with the voters', value: (law.appeal - 0.5) * 5 },
     { label: 'The proposer’s favor with the people', value: people / 45 },
-    { label: 'Speeches for and against', value: p.swing },
+    // Speeches move votes, but a crowd's mind is only so movable.
+    { label: 'Speeches for and against', value: 1.2 * Math.tanh(p.swing / 1.2) },
     { label: 'Hard times make the crowd bolder', value: law.side < 0 && s.crisis.stability < 50 ? 0.4 : 0 },
   ];
   const logit = parts.reduce((a, x) => a + x.value, 0);

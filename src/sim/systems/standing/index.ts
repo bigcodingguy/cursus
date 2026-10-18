@@ -26,6 +26,6 @@ export const standing: SystemDef = {
     });
   },
   yearly(s) {
-    for (const [id, list] of Object.entries(s.standing.entries)) s.standing.entries[id] = list.filter((x) => Math.abs(entryValue(x, s.day)) >= 0.3);
+    for (const [id, list] of Object.entries(s.standing.entries)) s.standing.entries[id] = list.filter((x) => Math.abs(entryValue(x, s.day)) >= 0.5);
   },
 };

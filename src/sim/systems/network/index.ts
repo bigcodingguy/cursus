@@ -3,8 +3,12 @@ import type { SystemDef } from '../../core';
 import type { GameState } from '../../types';
 import { memoryValue } from './api';
 import { heirOf } from '../family/api';
+import { favorBalance } from './api';
 
-const MAX_MEMORIES = 60;
+const MAX_MEMORIES = 40;
+const FAVOR_CAP = 5;
+/** Favors lapse after eight years: gratitude fades. */
+const FAVOR_DAYS = 365 * 8;
 
 export const network: SystemDef = {
   id: 'network',
@@ -23,7 +27,11 @@ export const network: SystemDef = {
     });
     on('favor', (s, e) => {
       if (e.debtor === e.creditor) return;
-      s.network.favors.push({ id: s.network.nextFavorId++, debtor: e.debtor, creditor: e.creditor, weight: e.weight, reason: e.reason, day: s.day });
+      // Gratitude has a ceiling: a man owes another at most FAVOR_CAP, however much is done for him.
+      const room = FAVOR_CAP - favorBalance(s, e.debtor, e.creditor);
+      const weight = Math.min(e.weight, room);
+      if (weight <= 0) return;
+      s.network.favors.push({ id: s.network.nextFavorId++, debtor: e.debtor, creditor: e.creditor, weight, reason: e.reason, day: s.day });
     });
     on('favor.spend', (s, e) => {
       s.network.favors = s.network.favors.filter((f) => f.id !== e.id);
@@ -68,6 +76,7 @@ export const network: SystemDef = {
   },
   monthly(s) {
     if (Math.floor(s.day / 30) % 3 !== 0) return;
+    s.network.favors = s.network.favors.filter((f) => s.day - f.day < FAVOR_DAYS);
     for (const id of Object.keys(s.network.memories)) prune(s, id, false);
   },
 };
@@ -75,7 +84,7 @@ export const network: SystemDef = {
 function prune(s: GameState, owner: string, hard: boolean) {
   const list = s.network.memories[owner];
   const vals = list.map((m) => ({ m, v: Math.abs(memoryValue(m, s.day)) }));
-  let kept = vals.filter((x) => x.v >= 0.5 && s.chars[x.m.about]?.alive !== false);
+  let kept = vals.filter((x) => x.v >= 1 && s.chars[x.m.about]?.alive !== false);
   if (hard && kept.length > MAX_MEMORIES - 15) {
     kept.sort((a, b) => b.v - a.v);
     kept = kept.slice(0, MAX_MEMORIES - 15);

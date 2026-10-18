@@ -204,8 +204,8 @@ export function appealParts(p: Profile, unit: string | Unit): { label: string; v
   const parts: { label: string; value: number }[] = [];
   if (p.assembly === 'centuriate') {
     // The rich vote first and weigh most: name and the boni count; the crowd counts in the lower classes.
-    parts.push({ label: 'Dignitas and name', value: 0.045 * p.dig });
-    parts.push({ label: 'Favor of the boni', value: 0.025 * u.wealth * p.boni });
+    parts.push({ label: 'Dignitas and name', value: 0.035 * p.dig });
+    parts.push({ label: 'Favor of the boni', value: 0.04 * u.wealth * p.boni });
     parts.push({ label: 'Favor of the people', value: 0.02 * (1 - u.wealth) * p.people });
     const effort = avg(p.canvass);
     if (effort) parts.push({ label: 'Canvassing', value: 0.55 * Math.log(1 + effort) });
@@ -229,7 +229,8 @@ export function appealParts(p: Profile, unit: string | Unit): { label: string; v
   }
   if (p.expected) parts.push({ label: 'Everyone expects him to win', value: 2.8 });
   // The nobles guard the consulship: the centuries of the rich do not lightly elect a man without consular ancestors.
-  if (p.newMan) parts.push({ label: 'A new man: no consul among his ancestors', value: -1.6 * u.wealth });
+  // ...unless they trust him: the boni's favor softens it (Cato, Marius once, the Ciceros later).
+  if (p.newMan) parts.push({ label: 'A new man: no consul among his ancestors', value: -1.6 * u.wealth * (1 - 0.7 * Math.max(0, Math.min(1, p.boni / 50))) });
   return parts;
 }
 

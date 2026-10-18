@@ -203,7 +203,7 @@ function verdict(s: GameState, c: Case) {
     // The first great conviction makes a name; later ones add less.
     const prior = pros.flags.convictions ?? 0;
     emit(s, 'charFlag', { who: pros.id, key: 'convictions', value: prior + 1 });
-    emit(s, 'standing', { who: pros.id, kind: 'dignitas', value: prior === 0 ? 7 : prior < 3 ? 3 : 1, label: `Convicted ${shortName(def)} of ${what}`, halfLife: 0 });
+    emit(s, 'standing', { who: pros.id, kind: 'dignitas', value: prior === 0 ? 7 : prior < 2 ? 2 : 0.5, label: `Convicted ${shortName(def)} of ${what}`, halfLife: 0 });
     emit(s, 'standing', { who: pros.id, kind: 'people', value: 12, label: 'Won a famous prosecution' });
     if (def.lean > 0.3) emit(s, 'standing', { who: pros.id, kind: 'boni', value: -4, label: 'Brought down one of the boni' });
     emit(s, 'memory', { owner: def.id, about: pros.id, act: 'Had me convicted', weight: -30, halfLife: 0 });
@@ -476,7 +476,12 @@ export const courts: SystemDef = {
         }
       }
     }
-    if (s.courts.cases.length > 80) s.courts.cases = s.courts.cases.filter((c) => c.status !== 'closed' || s.day - (c.verdictDay ?? c.expiresDay) < 1500);
+    // Archive: closed cases are kept three years (the player's own for good), without their jury rolls.
+    if (s.day % 365 === 0) {
+      const mine = (c: Case) => [c.defendant, c.prosecutor, c.defender, c.prosecutionPrep.coCounsel, c.defensePrep.coCounsel].some((x) => x && s.family.line.includes(x));
+      s.courts.cases = s.courts.cases.filter((c) => c.status !== 'closed' || mine(c) || s.day - (c.verdictDay ?? c.expiresDay) < 1095);
+      for (const c of s.courts.cases) if (c.status === 'closed' && s.day - (c.verdictDay ?? c.expiresDay) > 365) c.jury = c.jury.filter((j) => j.charId).map((j) => ({ ...j, bias: 0 }));
+    }
   },
 
   blocks(s) {

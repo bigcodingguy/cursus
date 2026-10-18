@@ -6,6 +6,7 @@ import { dayOf } from '../calendar';
 import { hasTie, opinion } from '../systems/network/api';
 import { standingOf } from '../systems/standing/api';
 import { cashOf } from '../systems/money/api';
+import { heirOf, sonsOf } from '../systems/family/api';
 import { heldEver, holdsOffice, openElection, voteGap, winChance } from '../systems/offices/api';
 import type { Breakdown, Character, CharId, GameState, OfficeId, StandingKind } from '../types';
 import { allChars, ageOf, breakdown, byHistorical, ch, clamp, shortName, yearBC } from '../util';
@@ -64,6 +65,8 @@ export type Cond =
   | { candidate: Ref }
   | { inHouse: Ref; house: string }
   | { female: Ref }
+  /** The player's career stage: youth (not yet served and under 22), junior (no seat in the Senate), senator, elder (consular, or 55+). */
+  | { stage: CareerStage[] }
   | { someone: Group }
   /** Leads a case in preparation and has no co-counsel yet. */
   | { leadsCase: Ref }
@@ -107,10 +110,19 @@ export type Effect =
   | { forgiveCall: { lender: Ref; borrower: Ref } }
   | { give: { from: Ref; to: Ref; amount: number | 'all'; reason: string } }
   | { setPatron: [Ref, Ref] } // [client, patron]
+  | { adopt: [Ref, Ref] } // [father, son]
   | { if: Cond; then: Effect[]; else?: Effect[] }
   | { forEach: Group; do: Effect[] };
 
 export type TextSeg = string | { when: Cond; text: string };
+
+export type CareerStage = 'youth' | 'junior' | 'senator' | 'elder';
+export function careerStage(s: GameState, c: Character): CareerStage {
+  if (heldEver(s, c.id, 'consul') || ageOf(s, c) >= 55) return 'elder';
+  if (c.rank === 'senator') return 'senator';
+  if (c.servedAbroad < 1 && ageOf(s, c) < 22) return 'youth';
+  return 'junior';
+}
 
 // ---------------- refs ----------------
 export function resolve(s: GameState, ref: Ref, sc: Scope): Character | undefined {
@@ -125,6 +137,8 @@ export function resolve(s: GameState, ref: Ref, sc: Scope): Character | undefine
     else if (r === 'father') c = ch(s, c.fatherId);
     else if (r === 'mother') c = ch(s, c.motherId);
     else if (r === 'spouse') c = c.spouseId && s.chars[c.spouseId]?.alive ? s.chars[c.spouseId] : undefined;
+    else if (r === 'heir') c = ch(s, heirOf(s, c.id));
+    else if (r === 'youngerSon') c = sonsOf(s, c.id)[1];
     else return undefined;
   }
   return c;
@@ -267,6 +281,7 @@ export function evalCond(s: GameState, c: Cond, sc: Scope): boolean {
   }
   if ('inHouse' in c) return resolve(s, c.inHouse, sc)?.familyId === c.house;
   if ('female' in c) return !!resolve(s, c.female, sc)?.female;
+  if ('stage' in c) return c.stage.includes(careerStage(s, s.chars[s.playerId]));
   if ('someone' in c) return groupMembers(s, c.someone, sc).length > 0;
   if ('leadsCase' in c) {
     const x = resolve(s, c.leadsCase, sc);
@@ -428,6 +443,12 @@ function applyEffect(s: GameState, e: Effect, sc: Scope): void {
     if (!from || !to) return;
     const amt = e.give.amount === 'all' ? Math.max(0, cashOf(s, from)) : Math.min(e.give.amount, Math.max(0, cashOf(s, from)));
     if (amt > 0) emit(s, 'transfer', { from, to, amount: amt, reason: e.give.reason });
+    return;
+  }
+  if ('adopt' in e) {
+    const f = resolve(s, e.adopt[0], sc);
+    const son = resolve(s, e.adopt[1], sc);
+    if (f && son) emit(s, 'adopt', { father: f.id, son: son.id });
     return;
   }
   if ('setPatron' in e) {

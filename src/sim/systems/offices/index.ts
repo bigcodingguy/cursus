@@ -401,6 +401,16 @@ export const offices: SystemDef = {
 
   yearly(s) {
     const y = yearBC(s);
+    // Archive: old elections keep their winners and tallies, not the tribe-by-tribe count or the canvass.
+    for (const e of s.offices.elections) {
+      if (e.status !== 'held' || e.forYearBC <= y) continue;
+      if (e.results) e.results.tribes = [];
+      for (const c of e.candidates) {
+        c.canvass = {};
+        c.bribes = {};
+      }
+    }
+    for (const id of Object.keys(s.offices.groundwork)) if (!s.chars[id]?.alive) delete s.offices.groundwork[id];
     // Elections fill the seats; if one ever left a curule chair empty, the Senate's men fill it.
     const have = (o: OfficeId) => s.offices.records.filter((r) => r.office === o && r.yearBC === y).length;
     if (have('consul') < 2) fillSeats(s, 'consul', y, 2 - have('consul'), FASTI[y]?.consuls ?? []);

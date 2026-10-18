@@ -274,4 +274,78 @@ export const CAREER_EVENTS: EventDef[] = [
     ],
     choices: [{ label: 'Write to his family' }],
   },
+  // ---------------- senatorial business (the paced pool, for men with a seat in the Senate) ----------------
+  {
+    id: 'opp_sententia',
+    pool: 'opportunity',
+    title: 'Your opinion is asked',
+    cooldown: 300,
+    when: { all: [{ inRome: 'player' }, { stage: ['senator', 'elder'] }] },
+    text: [
+      'The presiding consul goes down the benches by rank, asking each senator his opinion. Today he reaches yours.',
+      { when: { all: [{ num: { pressure: 'numidia' }, gte: 30 }, { noFlag: 'jugurtha_captured' }] }, text: 'The question is Numidia: whether to receive Jugurtha’s envoys, who have come with letters — and, everyone assumes, with money.' },
+      { when: { any: [{ num: { pressure: 'numidia' }, lte: 29 }, { flag: 'jugurtha_captured' }] }, text: 'The question is the grain supply: the price at Ostia has doubled, and the plebs are gathering outside the Curia.' },
+      'The house is listening. A sententia is remembered.',
+    ],
+    choices: [
+      { label: 'Speak for a hard line', effects: [{ standing: { who: 'player', kind: 'boni', value: 3, label: 'A firm sententia in the Senate' } }, { standing: { who: 'player', kind: 'dignitas', value: 1, label: 'Spoke well in the Senate', halfLife: 2000 } }], text: 'Older men nod. Some write down what you said.' },
+      { label: 'Speak for what the people want', effects: [{ standing: { who: 'player', kind: 'people', value: 3, label: 'Took the people’s side in the Senate' } }, { standing: { who: 'player', kind: 'boni', value: -2, label: 'Courted the crowd in the Senate' } }], text: 'It is repeated in the Forum by evening, not always kindly.' },
+      { label: 'Agree with the last speaker', text: 'You rise, say you agree with the consular before you, and sit down. Most senators do.' },
+    ],
+  },
+  {
+    id: 'opp_town_patron',
+    pool: 'opportunity',
+    title: 'Envoys from a town',
+    cooldown: 900,
+    when: { all: [{ inRome: 'player' }, { stage: ['senator', 'elder'] }] },
+    text: 'Three councillors from a town in Latium, in their best togas, ask whether you will be their patron in Rome: speak for them in the Senate, see their petitions heard, take their sons into your house. They have brought a silver cup.',
+    choices: [
+      { label: 'Accept', effects: [{ standing: { who: 'player', kind: 'dignitas', value: 2, label: 'Patron of a town' } }, { standing: { who: 'player', kind: 'people', value: 2, label: 'Patron of a town' } }, { occupy: 'player', days: 4 }], text: 'Your name goes up on a bronze tablet in their forum. It will bring work, and votes.' },
+      { label: 'Decline, kindly', text: 'They go to someone else, who will collect the votes.' },
+    ],
+  },
+  {
+    id: 'opp_young_client',
+    pool: 'opportunity',
+    title: 'A young man at the salutatio',
+    cooldown: 365,
+    when: { all: [{ inRome: 'player' }, { stage: ['senator', 'elder'] }] },
+    roles: { youth: { pick: { select: 'adultMen', inRome: true, where: { all: [{ num: { age: 'it' }, gte: 18, lte: 28 }, { not: { senator: 'it' } }, { not: { exists: 'it.patron' } }, { not: { same: ['it', 'player'] } }] } }, best: { oratory: 'it' } } },
+    needs: ['youth'],
+    text: '{youth} has been coming to your morning salutatio for a month, standing at the back. Today he asks to speak to you: he wants to be your man — to follow you to the Forum, learn from you, and have your name behind him when he stands for office.',
+    choices: [
+      { label: 'Take him on', effects: [{ setPatron: ['youth', 'player'] }, { memory: { owner: 'youth', about: 'player', act: 'Took me under his wing', weight: 18, halfLife: 6000 } }], text: 'A client who may one day sit on the tribunes’ bench. He swears he will never forget it.' },
+      { label: 'Send him to someone else', effects: [{ memory: { owner: 'youth', about: 'player', act: 'Turned me away', weight: -6 } }] },
+    ],
+  },
+  {
+    id: 'opp_embassy',
+    pool: 'opportunity',
+    title: 'An embassy',
+    cooldown: 1000,
+    when: { all: [{ inRome: 'player' }, { stage: ['senator', 'elder'] }, { num: { age: 'player' }, gte: 35 }] },
+    text: 'The Senate is sending three of its members to a king in the East, to settle a quarrel over a frontier and remind him whose friend he is. The consul has put your name forward. It means three months away from Rome.',
+    choices: [
+      { label: 'Go', effects: [{ travel: 'player', to: 'abroad', days: 90 }, { standing: { who: 'player', kind: 'dignitas', value: 4, label: 'Envoy of the Senate', halfLife: 0 } }, { money: { who: 'player', amount: 20000, reason: 'a king’s gifts to the envoys' } }], text: 'You come back with the frontier settled, a king’s compliments, and a crate of gifts the law lets you keep.' },
+      { label: 'Ask to be excused', effects: [{ standing: { who: 'player', kind: 'dignitas', value: -1, label: 'Declined an embassy', halfLife: 1500 } }] },
+    ],
+  },
+  {
+    id: 'opp_adoption_offer',
+    pool: 'opportunity',
+    title: 'A son for your house',
+    cooldown: 500,
+    when: { all: [{ inRome: 'player' }, { num: { age: 'player' }, gte: 30 }, { not: { exists: 'player.heir' } }] },
+    roles: { donor: { pick: { select: 'senators', inRome: true, where: { all: [{ num: { opinion: ['it', 'player'] }, gte: 0 }, { exists: 'it.youngerSon' }, { not: { same: ['it', 'player'] } }] } }, best: { opinion: ['it', 'player'] } }, son: 'donor.youngerSon' },
+    needs: ['donor', 'son'],
+    text: [
+      'You have no son to carry on your name, and everyone knows it. {donor}, who has more sons than his estates can launch, comes to you with an offer: his younger boy, {son}, to be adopted into your house.',
+      'He would take your name, your sacra and your debts, and keep his father’s friends. It is how the great houses survive.',
+    ],
+    choices: [
+      { label: 'Adopt him', effects: [{ adopt: ['player', 'son'] }, { memory: { owner: 'donor', about: 'player', act: 'Took my son into his house', weight: 20, halfLife: 0 } }, { tie: { a: 'donor', b: 'player', kind: 'kin' } }], text: 'Before a praetor, the old form: three sales and a claim. {son} is yours.' },
+      { label: 'Not yet', text: 'There is time, you tell him. He is too polite to say otherwise.' },
+    ],
+  },
 ];

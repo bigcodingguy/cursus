@@ -56,6 +56,10 @@ const OPP_PREFS: Record<string, string[]> = {
   saturninus_end: ['Go home'],
   mob_at_door: ['Leave the city'],
   client_veto: ['Let it pass'],
+  opp_adoption_offer: ['Adopt him'],
+  opp_young_client: ['Take him on'],
+  opp_embassy: ['Go'],
+  opp_town_patron: ['Accept'],
 };
 
 export const STRATEGIES: Record<StrategyId, Strategy> = {

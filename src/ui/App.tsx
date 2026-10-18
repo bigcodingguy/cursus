@@ -69,7 +69,7 @@ function Title() {
         <div className="row" style={{ marginTop: '1rem' }}>
           <button onClick={() => startNew({ seed: /^\d+$/.test(seed) ? Number(seed) : seed, praenomen: prae, nomen })}>Begin</button>
           {auto && (
-            <button className="green" onClick={() => { const e = loadSlot('auto'); if (e) toast(e); }}>
+            <button className="green" onClick={async () => { const e = await loadSlot('auto'); if (e) toast(e); }}>
               Continue ({plainDate(Number(auto))})
             </button>
           )}
@@ -96,8 +96,8 @@ function SaveMenu({ onClose }: { onClose: () => void }) {
             <div key={sl} className="card spread">
               <span>Slot {sl}: {info ? plainDate(Number(info)) : <span className="muted">empty</span>}</span>
               <span className="row">
-                <button onClick={() => { toast(saveSlot(sl) ? 'Saved' : 'Could not save'); onClose(); }}>Save</button>
-                <button className="ghost" disabled={!info} onClick={() => { const e = loadSlot(sl); toast(e ?? 'Loaded'); onClose(); }}>Load</button>
+                <button onClick={async () => { const e = await saveSlot(sl); if (!e) toast('Saved'); onClose(); }}>Save</button>
+                <button className="ghost" disabled={!info} onClick={async () => { const e = await loadSlot(sl); toast(e ?? 'Loaded'); onClose(); }}>Load</button>
               </span>
             </div>
           );
@@ -111,7 +111,7 @@ function SaveMenu({ onClose }: { onClose: () => void }) {
             a.download = 'cursus-save.json';
             a.click();
           }}>Download save file</button>
-          <button className="ghost" onClick={() => { if (confirm('Leave this game? Unsaved progress since the last autosave is lost.')) { saveSlot('auto'); quit(); onClose(); } }}>Title screen</button>
+          <button className="ghost" onClick={() => { if (confirm('Leave this game? It is saved to the autosave slot first.')) { void saveSlot('auto').then((e) => { if (!e) { quit(); onClose(); } }); } }}>Title screen</button>
           <button className="ghost" onClick={onClose}>Close</button>
         </div>
         <p className="small muted">The game also saves itself every month of game time.</p>

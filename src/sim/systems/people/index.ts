@@ -92,6 +92,18 @@ export const people: SystemDef = {
       s.pauseRequests.push(e.reason);
     });
   },
+  yearly(s) {
+    // Archive the long dead who are nobody's ancestors in the player's house: keep name, dates and family links only.
+    const pl = s.chars[s.playerId];
+    for (const c of allChars(s)) {
+      if (c.alive || c.historical || !c.died || s.day - c.died.day < 1825) continue;
+      if (c.familyId && c.familyId === pl?.familyId) continue;
+      c.bio = '';
+      c.flags = {};
+      const a = s.money.accounts[c.id];
+      if (a && Math.abs(a.cash) < 1) delete s.money.accounts[c.id];
+    }
+  },
   daily(s) {
     for (const c of allChars(s)) {
       if (c.alive && c.flags.returnDay !== undefined && s.day >= c.flags.returnDay && c.location !== 'exile') {

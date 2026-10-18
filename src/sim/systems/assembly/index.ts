@@ -40,7 +40,8 @@ function veto(s: GameState, p: Proposal, tribuneId: string) {
   emit(s, 'log', { text: `${fullName(t)} vetoes ${law.label.toLowerCase()}.`, kind: tribuneId === s.playerId || p.proposer === s.playerId ? 'player' : 'world', about: [tribuneId, p.proposer] });
   emit(s, 'memory', { owner: p.proposer, about: tribuneId, act: 'Vetoed my law', weight: -35, halfLife: 4000 });
   emit(s, 'standing', { who: tribuneId, kind: law.side < 0 ? 'boni' : 'people', value: 5, label: 'Vetoed a bill' });
-  if (law.side < 0) emit(s, 'standing', { who: tribuneId, kind: 'people', value: -5, label: 'Vetoed a popular bill' });
+  if (law.side < 0) emit(s, 'standing', { who: tribuneId, kind: 'people', value: law.appeal > 0.6 ? -14 : -5, label: 'Vetoed a popular bill', halfLife: 2500 });
+  if (law.appeal > 0.6) emit(s, 'stability', { add: -2, label: 'A popular bill vetoed' });
   if (p.proposer === s.playerId && t.patronId === s.playerId) {
     emit(s, 'event.trigger', { eventId: 'client_veto', roles: { client: tribuneId }, vars: { law: law.label.toLowerCase() } });
   }
@@ -105,13 +106,16 @@ export const assembly: SystemDef = {
       },
       npc: (s, a) => {
         if (canPropose(s, a)) return [];
-        if (rand(s.rng) > 0.25) return [];
+        if (rand(s.rng) > 0.08) return [];
         const out = [];
         for (const law of availableLaws(s)) {
           const agree = law.side * a.lean; // >0: a man of the people with a popular bill, or an optimate with the Senate's
           const sponsor = law.sponsor && a.historical === law.sponsor ? 3 : 0;
           const u = 0.6 + 2.2 * agree + a.traits.ambition + sponsor + (law.appeal - 0.5) * 2;
-          if (u > 1.5) out.push({ params: { law: law.id }, utility: u });
+          if (u <= 1.5) continue;
+          // A magistrate brings a bill he thinks can pass.
+          const odds = passChance(s, { id: -1, law: law.id, proposer: a.id, proposedDay: s.day, voteDay: s.day + NOTICE_DAYS, status: 'pending', swing: 0, spoke: [] }).total;
+          if (odds >= 0.25) out.push({ params: { law: law.id }, utility: u });
         }
         return out;
       },
