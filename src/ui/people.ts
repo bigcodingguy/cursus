@@ -110,6 +110,12 @@ export function youDid(act: string): string {
     const m = /^([A-Za-z]+)(.*)$/.exec(w);
     if (!m) return w;
     const low = m[1].toLowerCase();
+    // His present tense ("Writes to me", "Has Tiberius's blood") becomes yours ("write to him", "have").
+    if (i === 0) {
+      const irregular: Record<string, string> = { has: 'have', was: 'were', is: 'are' };
+      if (irregular[low]) return irregular[low] + m[2];
+      if (/[^s]s$/.test(low) && !/ed$/.test(low)) return low.slice(0, -1) + m[2];
+    }
     const r = swap[low] ?? (i === 0 ? low : m[1]);
     return r + m[2];
   });

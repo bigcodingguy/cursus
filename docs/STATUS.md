@@ -1,6 +1,6 @@
 # Status
 
-_Updated 2026-10-18 — Blake’s new priorities: stage 1 (critical fixes) deployed; stage 2 (people-first redesign) next; stage 3 (art) needs network access. Phase 3b as scoped is dropped._
+_Updated 2026-10-18 — Blake’s new priorities: stage 1 (critical fixes) and stage 2 (people-first redesign) deployed; stage 3 (art and maps) is blocked on network access to Wikimedia. Phase 3b as scoped is dropped._
 
 ## Where things stand
 
@@ -39,6 +39,18 @@ Acceptance moments verified (in bot runs and in my own UI playthrough):
 - **Person panel** for yourself: how Rome sees you, ambitions, family (father’s health, debts, letters), what men lately remember of you.
 - **Mortality** age-weighted with varied causes.
 
+## Stage 2 — people-first redesign (2026-10-18)
+- **The map is the centerpiece.** It fills the screen; clicking a district opens its actions as a panel over the map (Esc or × closes it). Households in a district fold away.
+- **Your circle.** The default view is up to nine cards for the people who matter now — your family and patron first, then friends, enemies, creditors, rivals in your election, people in your case, anyone waiting on your answer, anyone who lately did something you’ll remember. Each card: portrait, role (“Your patron”, “Your rival in the election”), one plain sentence (“Laenas thinks highly of you since you stood by him in the Forum. He owes you a favor.”), and Call on. Everyone else is a search behind “Everyone in Rome (reference)”.
+- **Words first, numbers on hover.** A person’s page leads with where you stand and what he remembers, in sentences (“You prosecuted his kinsman”); his rank and favor are phrases (“a man of high rank; disliked by the boni”); hover any of it for the numbers.
+- **Decluttered.** One dark “Now” box (what you’re doing, the next step, two dates; more aims on request). Four tabs instead of nine: People, House (family; favors and debts folded), Forum (your case, the elections, laws, gossip — each a folding section that opens when it matters), Record.
+- **Intro note** only at a new game or when an heir takes over, worded for the stage you’re at. **Same-named men** (fathers and sons) show their age.
+- **Consulship balance** now runs the right way: establishment 20%, orator 7%, populist 0% of first men reach the consulship (targets were ~25–35% and ~10–20%; close but a little low).
+- The “frontend-design” skill named in the brief isn’t installed here; I followed its principles by hand and critiqued screenshots (fixed: wife missing from the circle, favors crowding out relationships, “you writes”, a tab label wrapping, a full-height panel with little in it).
+
+## Stage 3 — art and maps: blocked
+The environment’s network policy refuses `upload.wikimedia.org` and `commons.wikimedia.org`, so the Fayum portraits, busts, Lanciani’s Forma Urbis, an antique Mediterranean atlas and the history paintings cannot be downloaded. To unblock: in the cloud environment menu (session title bar) → Edit → Network access, add both hosts under Allowed domains (keep “Allow package managers” ticked), or choose a broader level. Steps: https://code.claude.com/docs/en/cloud-environments#network-access. Nothing was faked in SVG meanwhile.
+
 ## Stage 1 — critical fixes (2026-10-18)
 - **Saves no longer fail.** Saves are gzip-compressed and kept in IndexedDB (localStorage only as a fallback; old saves move over on first load). A 100 BC save is ~320 KB stored, so the three slots and the autosave fit many times over. Saves queue one after another, and any failure — autosave included — shows a message. The sim also archives as it goes: old elections keep only winners and tallies, closed cases go after three years, faded memories and standings lapse, and long-dead minor men keep only their names and family links. Tested: a 100 BC save round-trips exactly and four fit in well under 2.5 MB; in the browser four slots were written, the page reloaded, and Continue restored the game.
 - **Fewer, better prompts.** Errands, sneers, quarrels, dinner invitations and junior counsel are for young men only; senators get senatorial business instead (your opinion asked in the Senate, a town asking you to be its patron, a young man asking to be your client, an embassy). Cooldowns are now 300–1000 days, the quiet spell before an offer grows with rank, and events you haven’t seen lately are preferred.
@@ -64,7 +76,7 @@ Authorized by Blake without playing first. The game now runs from 133 BC to the 
 - CI (`.github/workflows/ci.yml`) runs on every push.
 
 ## Known issues / rough edges
-- The consulship is still inverted in bot runs after stage 1 (orator 31%, establishment 15%; target the reverse). A stronger new-man handicap tempered by the boni’s favor is being tuned in stage 2.
+- The consulship is rarer than Blake’s targets after stage 2 (establishment 20%, orator 7%, populist 0%); populares never reach it in bot runs.
 - Family extinction is still ~22% in bot runs: most of it is men dying young before they marry; the adoption offer helps only from 30.
 - Placeholder art throughout (by design until Phase 4).
 - Bots default on a loan at least once in roughly a third of 33-year runs (they borrow whenever short and own no land to sell); real players can avoid it, but debt is harsher over a long career than in the slice.
