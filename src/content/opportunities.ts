@@ -90,7 +90,7 @@ export const OPPORTUNITIES: EventDef[] = [
     when: inRome,
     roles: {
       host: { pick: { select: 'senators', inRome: true, where: { num: { opinion: ['it', 'player'] }, gte: -5 } }, random: true },
-      guest: { pick: { select: 'senators', inRome: true }, random: true },
+      guest: { pick: { select: 'senators', inRome: true, where: { not: { same: ['it', 'host'] } } }, random: true },
     },
     needs: ['host', 'guest'],
     player: true,
@@ -131,7 +131,7 @@ export const OPPORTUNITIES: EventDef[] = [
     id: 'opp_peer_support',
     pool: 'opportunity',
     title: 'A friend in a quarrel',
-    cooldown: 150,
+    cooldown: 300,
     when: inRome,
     roles: { peer: { pick: youngNoble([{ num: { opinion: ['it', 'player'] }, gte: 0 }]), random: true } },
     needs: ['peer'],

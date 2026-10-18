@@ -268,6 +268,7 @@ export const family: SystemDef = {
         if (ageOf(s, a) < 30) return 'A man adopts in his maturity (30)';
         if (sonsOf(s, a.id).length >= 2) return 'You have sons enough';
         if (!son?.alive || son.female || son.fatherId === a.id) return 'Choose a young man';
+        if (a.id !== s.playerId && (son.id === s.playerId || son.fatherId === s.playerId)) return 'Not without his consent';
         const f = son.fatherId ? s.chars[son.fatherId] : undefined;
         if (!f?.alive || sonsOf(s, f.id).length < 2) return 'His father will not give up an only son';
         if (ageOf(s, son) > 35) return 'Too old to be adopted';
@@ -290,7 +291,8 @@ export const family: SystemDef = {
       npc: (s, a) => {
         if (ageOf(s, a) < 45 || sonsOf(s, a.id).length || a.rank !== 'senator') return [];
         if (rand(s.rng) > 0.1) return [];
-        const cands = allChars(s).filter((c) => !c.female && c.alive && ageOf(s, c) >= 10 && ageOf(s, c) <= 25 && c.fatherId && sonsOf(s, c.fatherId).length >= 2);
+        // The player and his sons are his to give, never taken by an NPC's choice.
+        const cands = allChars(s).filter((c) => !c.female && c.alive && c.id !== s.playerId && c.fatherId !== s.playerId && ageOf(s, c) >= 10 && ageOf(s, c) <= 25 && c.fatherId && sonsOf(s, c.fatherId).length >= 2);
         if (!cands.length) return [];
         return [{ params: { son: cands[Math.floor(rand(s.rng) * cands.length)].id }, utility: 1.7 }];
       },
