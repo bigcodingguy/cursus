@@ -237,7 +237,7 @@ function Game({ s, speed, version }: { s: GameState; speed: number; version: num
   const tabs: [Tab, string][] = [
     ['people', 'People'],
     ['house', 'House'],
-    ['forum', `Forum${active ? ` · ${active}` : heardNew ? ` · ${heardNew} new` : ''}`],
+    ["forum", `Forum${active ? ` · ${active}` : heardNew ? ` · ${heardNew}` : ""}`],
     ['record', 'Record'],
   ];
   return (

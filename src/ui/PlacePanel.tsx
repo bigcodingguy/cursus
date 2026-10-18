@@ -13,7 +13,7 @@ import { standingOf } from '../sim/systems/standing/api';
 import type { ActionParams, GameState, PlaceId } from '../sim/types';
 import { ageOf, fmtHS, fullName, shortName } from '../sim/util';
 import { relevance, whyMatters } from './people';
-import { Name, Odds, opinionWord, shortDate, useUI, Why } from './common';
+import { Name, Odds, opinionWord, Section, shortDate, useUI, Why } from './common';
 import { run } from './store';
 
 export function ActionRow({ s, id, params, label, children }: { s: GameState; id: string; params: ActionParams; label?: string; children?: React.ReactNode }) {
@@ -85,8 +85,7 @@ function Households({ s, place }: { s: GameState; place: PlaceId }) {
   if (!residents.length) return null;
   const shown = all ? residents : residents.slice(0, 6);
   return (
-    <>
-      <h3>Households here</h3>
+    <Section title={`Households here (${residents.length})`} open={!s.chars[s.playerId].patronId && place === 'palatine'}>
       <p className="small muted">Those who matter to you first. Click a name to call on him, ask a favor or invite him to dine.</p>
       <ul className="list">
         {shown.map(({ c }) => (
@@ -98,7 +97,7 @@ function Households({ s, place }: { s: GameState; place: PlaceId }) {
           Show all {residents.length}
         </a>
       )}
-    </>
+    </Section>
   );
 }
 
