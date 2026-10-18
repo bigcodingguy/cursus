@@ -7,10 +7,10 @@ import { getAction, type SystemDef } from '../../core';
 import { evalCond, renderText } from '../../dsl';
 import { chance, pick, randInt } from '../../rng';
 import type { GameState } from '../../types';
-import { isActiveMan } from '../../util';
+import { allChars, isActiveMan } from '../../util';
 
 export function clientsOf(s: GameState, id: string) {
-  return Object.values(s.chars).filter((c) => c.alive && c.patronId === id);
+  return allChars(s).filter((c) => c.alive && c.patronId === id);
 }
 
 export function playerHearsToday(s: GameState): boolean {
@@ -55,7 +55,7 @@ export const news: SystemDef = {
     // Idle talk: a rumor or two each month, true or not.
     if (!chance(s.rng, 0.7)) return;
     const r = pick(s.rng, RUMORS);
-    const men = Object.values(s.chars).filter((c) => isActiveMan(s, c) && c.location === 'rome' && c.rank === 'senator');
+    const men = allChars(s).filter((c) => isActiveMan(s, c) && c.location === 'rome' && c.rank === 'senator');
     if (!men.length) return;
     const a = pick(s.rng, men);
     const sc = { roles: { a: a.id }, vars: {} };

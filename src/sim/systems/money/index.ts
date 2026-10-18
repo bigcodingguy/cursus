@@ -1,3 +1,4 @@
+import { allChars } from '../../util';
 import { emit, on } from '../../bus';
 import { dateOf } from '../../calendar';
 import type { SystemDef } from '../../core';
@@ -105,7 +106,7 @@ export const money: SystemDef = {
     // Arrears: anyone in the red borrows from the nearest banker at a stiff rate.
     for (const [id, a] of Object.entries(m.accounts)) {
       if (a.cash >= 0 || !s.chars[id]?.alive) continue;
-      const banker = Object.values(s.chars).find((c) => c.alive && c.flags.banker && c.id !== id && cashOf(s, c.id) > -a.cash + 1000);
+      const banker = allChars(s).find((c) => c.alive && c.flags.banker && c.id !== id && cashOf(s, c.id) > -a.cash + 1000);
       if (!banker) continue;
       const need = Math.ceil((-a.cash + 2000) / 1000) * 1000;
       emit(s, 'loan.make', { lender: banker.id, borrower: id, amount: need, months: 12, monthlyRate: 0.015 });

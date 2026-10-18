@@ -263,9 +263,16 @@ export function forecastRuns(s: GameState, e: Election) {
   return runs;
 }
 
+// Forecasts are costly; reuse them within a day while the field and the campaigns are unchanged.
+const forecastCache = new WeakMap<GameState, { key: string; runs: ReturnType<typeof forecastRuns> }>();
 export function winChance(s: GameState, e: Election, who: CharId): number {
-  const runs = forecastRuns(s, e);
-  return runs.filter((r) => r.winners.includes(who)).length / runs.length;
+  const key = `${s.day}|${e.office}|${e.day}|${e.postponements}|${JSON.stringify(e.candidates)}`;
+  let c = forecastCache.get(s);
+  if (!c || c.key !== key) {
+    c = { key, runs: forecastRuns(s, e) };
+    forecastCache.set(s, c);
+  }
+  return c.runs.filter((r) => r.winners.includes(who)).length / c.runs.length;
 }
 
 /** Votes `who` would need to win enough extra units to place among the winners (in the expected outcome). */

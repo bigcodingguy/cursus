@@ -4,7 +4,7 @@ import { on } from '../../bus';
 import { allActions, checkAction, startAction, type SystemDef } from '../../core';
 import { gauss, randInt } from '../../rng';
 import type { ActionParams } from '../../types';
-import { ageOf } from '../../util';
+import { allChars, ageOf } from '../../util';
 
 export const agents: SystemDef = {
   id: 'agents',
@@ -16,7 +16,7 @@ export const agents: SystemDef = {
   },
   daily(s) {
     const acts = allActions().filter((a) => a.npc);
-    for (const c of Object.values(s.chars)) {
+    for (const c of allChars(s)) {
       if (c.id === s.playerId || !c.alive || c.female || c.location !== 'rome' || c.busyUntil > s.day || c.nextThink > s.day) continue;
       if (ageOf(s, c) < 17) {
         c.nextThink = s.day + 60;

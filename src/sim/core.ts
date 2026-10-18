@@ -1,5 +1,6 @@
 // Core: system registry, action registry, daily tick, commands.
 
+import { allChars } from './util';
 import { dateOf } from './calendar';
 import { emit } from './bus';
 import type { ActionParams, Breakdown, Character, CharId, GameState, PlaceId } from './types';
@@ -150,7 +151,7 @@ export function tick(s: GameState): boolean {
   if (blockedBy(s)) return false;
   s.day += 1;
   const d = dateOf(s.day);
-  for (const c of Object.values(s.chars)) {
+  for (const c of allChars(s)) {
     if (c.action && c.action.endDay <= s.day) {
       const def = actions.get(c.action.id);
       const p = c.action.params;

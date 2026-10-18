@@ -7,7 +7,7 @@ import { registerAction, type SystemDef } from '../../core';
 import { evalCond } from '../../dsl';
 import { chance, rand } from '../../rng';
 import type { Breakdown, Character, CharId, GameState } from '../../types';
-import { ageOf, breakdown, byHistorical, clamp, fmtHS, menInRome, shortName, sigmoid } from '../../util';
+import { allChars, ageOf, breakdown, byHistorical, clamp, fmtHS, menInRome, shortName, sigmoid } from '../../util';
 import { playerCase } from '../courts/api';
 import { cashOf, debtOf, netWorth, STANDARD_RATE } from '../money/api';
 import { favorsOwed, memoriesAbout, opinion, willingness } from '../network/api';
@@ -156,7 +156,7 @@ export function speechOdds(s: GameState, a: Character, issue: IssueDef, stance: 
 }
 
 export function bankers(s: GameState): Character[] {
-  return Object.values(s.chars).filter((c) => c.alive && c.flags.banker);
+  return allChars(s).filter((c) => c.alive && c.flags.banker);
 }
 
 /** How much a banker will lend `who` in all, given his family's means. */
@@ -506,7 +506,7 @@ export const city: SystemDef = {
 
   monthly(s) {
     // NPC mornings, in aggregate: clients wait on their patrons.
-    for (const c of Object.values(s.chars)) {
+    for (const c of allChars(s)) {
       if (!c.alive || c.id === s.playerId || !c.patronId || c.location !== 'rome') continue;
       const pat = s.chars[c.patronId];
       if (!pat?.alive || pat.id === s.playerId) continue;

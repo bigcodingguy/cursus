@@ -5,7 +5,7 @@ import { emit, on } from '../../bus';
 import { registerAction, registerCommand, type SystemDef } from '../../core';
 import { chance, gauss, rand } from '../../rng';
 import type { Case, CasePrep, Character, CharId, GameState, Juror, Strategy } from '../../types';
-import { ageOf, clamp, fmtHS, fullName, shortName, sigmoid } from '../../util';
+import { allChars, ageOf, clamp, fmtHS, fullName, shortName, sigmoid } from '../../util';
 import { cashOf } from '../money/api';
 import { hasTie, opinion, tiesOf } from '../network/api';
 import { standingOf } from '../standing/api';
@@ -31,7 +31,7 @@ function drawJury(s: GameState, c: Case): Juror[] {
   const cls = c.juryClass;
   const involved = new Set([c.defendant, c.prosecutor, c.defender].filter(Boolean) as CharId[]);
   const defFam = s.chars[c.defendant].familyId;
-  const pool = Object.values(s.chars).filter(
+  const pool = allChars(s).filter(
     (x) => x.alive && !x.female && x.location === 'rome' && !involved.has(x.id) && x.id !== s.playerId && ageOf(s, x) >= 30 && (cls === 'senator' ? x.rank === 'senator' : x.rank === 'eques') && x.familyId !== defFam,
   );
   const jury: Juror[] = [];
@@ -65,7 +65,7 @@ function beginProsecution(s: GameState, c: Case, prosecutor: Character) {
   const def = s.chars[c.defendant];
   emit(s, 'memory', { owner: def.id, about: prosecutor.id, act: 'Prosecuted me', weight: -45, halfLife: 5000 });
   emit(s, 'tie', { a: def.id, b: prosecutor.id, kind: 'inimicus' });
-  for (const x of Object.values(s.chars)) {
+  for (const x of allChars(s)) {
     if (!x.alive || x.id === def.id || x.id === prosecutor.id) continue;
     if (x.familyId && x.familyId === def.familyId) emit(s, 'memory', { owner: x.id, about: prosecutor.id, act: 'Prosecuted my kinsman', weight: -20, halfLife: 3000 });
   }
@@ -79,7 +79,7 @@ function beginProsecution(s: GameState, c: Case, prosecutor: Character) {
 function chooseDefender(s: GameState, c: Case) {
   const def = s.chars[c.defendant];
   const pros = c.prosecutor!;
-  const cands = Object.values(s.chars).filter((x) => x.alive && !x.female && x.location === 'rome' && x.id !== pros && x.id !== def.id && ageOf(s, x) >= 20 && !hasTie(s, x.id, pros, 'kin'));
+  const cands = allChars(s).filter((x) => x.alive && !x.female && x.location === 'rome' && x.id !== pros && x.id !== def.id && ageOf(s, x) >= 20 && !hasTie(s, x.id, pros, 'kin'));
   let best: Character | undefined;
   let bestV = -Infinity;
   for (const x of cands) {
@@ -446,7 +446,7 @@ export const courts: SystemDef = {
 
 function chooseDefenderExcluding(s: GameState, c: Case, excl: CharId) {
   const def = s.chars[c.defendant];
-  const cands = Object.values(s.chars).filter((x) => x.alive && !x.female && x.location === 'rome' && x.id !== excl && x.id !== c.prosecutor && x.id !== def.id && ageOf(s, x) >= 20);
+  const cands = allChars(s).filter((x) => x.alive && !x.female && x.location === 'rome' && x.id !== excl && x.id !== c.prosecutor && x.id !== def.id && ageOf(s, x) >= 20);
   cands.sort((a, b) => b.oratory + opinion(s, b.id, def.id).total * 0.4 - (a.oratory + opinion(s, a.id, def.id).total * 0.4));
   c.defender = cands.find((x) => opinion(s, x.id, def.id).total >= 5 || x.familyId === def.familyId)?.id ?? def.id;
   c.jury = c.jury.filter((j) => j.charId !== c.defender);

@@ -8,7 +8,7 @@ import { dateOf, dayOf } from '../../calendar';
 import { registerAction, registerCommand, type SystemDef } from '../../core';
 import { chance, fork, gauss, pick, rand, randInt } from '../../rng';
 import type { Character, CharId, Election, GameState, OfficeId } from '../../types';
-import { ageOf, byHistorical, clamp, fullName, shortName, yearBC } from '../../util';
+import { allChars, ageOf, byHistorical, clamp, fullName, shortName, yearBC } from '../../util';
 import { cashOf } from '../money/api';
 import { standingOf } from '../standing/api';
 import { assemblyOf, candidacyOf, electionFor, electionOfCandidate, expectedBy, FORECAST_RUNS, forecastRuns, ineligibleFor, openElections, profiles, quaestorIneligible, voteOnce } from './api';
@@ -36,7 +36,7 @@ function fillSeats(s: GameState, office: OfficeId, y: number, seats: number, pre
     const c = byHistorical(s, key);
     if (c && c.alive && !c.flags.exiled && c.location !== 'exile' && chosen.length < seats && !busy(c.id)) chosen.push(c.id);
   }
-  const pool = Object.values(s.chars).filter((c) => !chosen.includes(c.id) && c.id !== s.playerId && !busy(c.id) && eligibleFor(s, c, office, y));
+  const pool = allChars(s).filter((c) => !chosen.includes(c.id) && c.id !== s.playerId && !busy(c.id) && eligibleFor(s, c, office, y));
   while (chosen.length < seats && pool.length) {
     const score = (c: Character) => Math.exp(0.04 * standingOf(s, c.id, 'dignitas').total + 0.01 * standingOf(s, c.id, 'boni').total + c.traits.ambition);
     let total = 0;
@@ -112,7 +112,7 @@ function spawnOutsiders(s: GameState, e: Election) {
     let nomenFull = pick(s.rng, OUTSIDE_NOMINA).split(' ');
     let praenomen = pick(s.rng, PRAENOMINA);
     // Avoid two living men with the same name.
-    for (let k = 0; k < 10 && Object.values(s.chars).some((c) => c.alive && c.praenomen === praenomen && c.nomen === nomenFull[0] && c.cognomen === nomenFull[1]); k++) {
+    for (let k = 0; k < 10 && allChars(s).some((c) => c.alive && c.praenomen === praenomen && c.nomen === nomenFull[0] && c.cognomen === nomenFull[1]); k++) {
       nomenFull = pick(s.rng, OUTSIDE_NOMINA).split(' ');
       praenomen = pick(s.rng, PRAENOMINA);
     }
@@ -144,7 +144,7 @@ function spawnOutsiders(s: GameState, e: Election) {
 function draftField(s: GameState, e: Election) {
   const want = e.seats + (e.office === 'consul' || e.office === 'censor' ? 2 : 3);
   if (e.candidates.length >= want) return;
-  const pool = Object.values(s.chars)
+  const pool = allChars(s)
     .filter((c) => c.id !== s.playerId && !candidacyOf(s, c.id) && !ineligibleFor(s, c, e.office, e.forYearBC))
     .sort((a, b) => standingOf(s, b.id, 'dignitas').total + b.traits.ambition * 20 - (standingOf(s, a.id, 'dignitas').total + a.traits.ambition * 20));
   for (const c of pool) {
@@ -279,7 +279,7 @@ export const offices: SystemDef = {
       npc: (s, a) => {
         if (a.id === s.playerId) return [];
         const cand = candidacyOf(s, a.id);
-        const soon = !cand && !openElections(s).length && a.traits.ambition > 0.5 && !quaestorIneligible(s, a, yearBC(s) - 1) && dateOf(s.day).month >= 2;
+        const soon = !cand && a.traits.ambition > 0.5 && dateOf(s.day).month >= 2 && !openElections(s).length && !quaestorIneligible(s, a, yearBC(s) - 1);
         if (!cand && !soon) return [];
         const cash = cashOf(s, a.id);
         const opts = [];

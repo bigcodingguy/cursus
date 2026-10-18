@@ -71,6 +71,25 @@ export function byHistorical(s: GameState, key: string): Character | undefined {
   return id ? s.chars[id] : undefined;
 }
 
+/** A key for caches over the set of characters: changes when one is added. -1 while an id is
+ *  reserved but the character not yet stored (do not cache then). */
+export function charsKey(s: GameState): number {
+  return s.nextCharId <= 1 || s.chars[`c${s.nextCharId - 1}`] ? s.nextCharId : -1;
+}
+
+const allCache = new WeakMap<GameState, { n: number; list: Character[] }>();
+/** Every character, living or dead (cached until a new one is added). Do not mutate the array. */
+export function allChars(s: GameState): Character[] {
+  const n = charsKey(s);
+  if (n < 0) return Object.values(s.chars);
+  let c = allCache.get(s);
+  if (!c || c.n !== n) {
+    c = { n, list: Object.values(s.chars) };
+    allCache.set(s, c);
+  }
+  return c.list;
+}
+
 const romeCache = new WeakMap<GameState, { day: number; n: number; men: Character[] }>();
 /** Living adult men in Rome today (cached per day). */
 export function menInRome(s: GameState): Character[] {

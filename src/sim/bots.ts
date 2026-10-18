@@ -14,7 +14,7 @@ import { standingOf } from './systems/standing/api';
 import { availableIssues, bankers, creditLimit } from './systems/city';
 import { clientsOf } from './systems/news';
 import type { ActionParams, GameState } from './types';
-import { ageOf, byHistorical, player } from './util';
+import { allChars, ageOf, byHistorical, player } from './util';
 
 export type StrategyId = 'orator' | 'populist' | 'establishment';
 
@@ -142,7 +142,7 @@ function decide(s: GameState, st: Strategy): void {
     for (const a of ['case.research', 'case.witnesses', 'case.documents', 'case.witnesses', 'case.documents']) if (act(s, a, { caseId: c.id })) return;
     const prep = c.prosecutor === me.id ? c.prosecutionPrep : c.defensePrep;
     if (!prep.coCounsel && every(s, 'cocounsel', 10)) {
-      const best = Object.values(s.chars).filter((x) => x.alive && x.location === 'rome' && x.id !== me.id && opinion(s, x.id, me.id).total > 5 && x.oratory > 40).sort((a, b) => b.oratory - a.oratory)[0];
+      const best = allChars(s).filter((x) => x.alive && x.location === 'rome' && x.id !== me.id && opinion(s, x.id, me.id).total > 5 && x.oratory > 40).sort((a, b) => b.oratory - a.oratory)[0];
       if (best && act(s, 'visit', { target: best.id, ask: 'cocounsel' })) return;
     }
   }
@@ -159,7 +159,7 @@ function decide(s: GameState, st: Strategy): void {
   if (candidacyOf(s, me.id)) {
     const cand = candidacyOf(s, me.id)!;
     if (every(s, 'endorse', 6)) {
-      const t = Object.values(s.chars).filter((x) => x.alive && x.location === 'rome' && x.rank === 'senator' && !cand.endorsements.includes(x.id) && !candidacyOf(s, x.id) && opinion(s, x.id, me.id).total > 5).sort((a, b) => opinion(s, b.id, me.id).total - opinion(s, a.id, me.id).total)[0];
+      const t = allChars(s).filter((x) => x.alive && x.location === 'rome' && x.rank === 'senator' && !cand.endorsements.includes(x.id) && !candidacyOf(s, x.id) && opinion(s, x.id, me.id).total > 5).sort((a, b) => opinion(s, b.id, me.id).total - opinion(s, a.id, me.id).total)[0];
       if (t && act(s, 'visit', { target: t.id, ask: 'endorse' })) return;
     }
     const zones = ['campus', 'subura', 'campus', 'arpinum'] as (keyof typeof CANVASS_ZONES)[];
@@ -198,11 +198,11 @@ function decide(s: GameState, st: Strategy): void {
     }
   }
   if (st.id === 'populist' && clientsOf(s, me.id).length < 6 && every(s, 'client', 9)) {
-    const t = Object.values(s.chars).find((x) => x.alive && x.rank === 'plebs' && x.patronId !== me.id && x.location === 'rome');
+    const t = allChars(s).find((x) => x.alive && x.rank === 'plebs' && x.patronId !== me.id && x.location === 'rome');
     if (t && act(s, 'visit', { target: t.id, ask: 'client' })) return;
   }
   if (every(s, 'dinner', st.id === 'establishment' ? 30 : 60) && cashOf(s, me.id) > 6000) {
-    const guests = Object.values(s.chars)
+    const guests = allChars(s)
       .filter((x) => x.alive && x.location === 'rome' && x.rank === 'senator' && !x.female && opinion(s, x.id, me.id).total > -20)
       .sort((a, b) => standingOf(s, b.id, 'dignitas').total - standingOf(s, a.id, 'dignitas').total)
       .slice(Math.floor(s.day / 7) % 5, (Math.floor(s.day / 7) % 5) + 2)
@@ -210,7 +210,7 @@ function decide(s: GameState, st: Strategy): void {
     if (guests.length && act(s, 'dinner', { guests, style: 'modest' })) return;
   }
   if (every(s, 'visit', 7)) {
-    const pool = Object.values(s.chars).filter((x) => x.alive && x.location === 'rome' && x.rank === 'senator' && x.id !== me.id);
+    const pool = allChars(s).filter((x) => x.alive && x.location === 'rome' && x.rank === 'senator' && x.id !== me.id);
     const t = me.patronId && s.day % 3 === 0 ? s.chars[me.patronId] : pool[s.day % Math.max(1, pool.length)];
     if (t && act(s, 'visit', { target: t.id, ask: 'none' })) return;
   }

@@ -382,7 +382,7 @@ export const EVENTS: EventDef[] = [
   {
     id: 'antyllius',
     title: 'Blood at the sacrifice',
-    when: { all: [{ someone: hardlineConsul }, { flag: 'junonia' }, { alive: '@c_gracchus' }, { after: [121, 1, 15] }] },
+    when: { all: [{ after: [121, 1, 15] }, { flag: 'junonia' }, { alive: '@c_gracchus' }, { someone: hardlineConsul }] },
     hazard: 0.03,
     player: true,
     roles: { consul: { pick: hardlineConsul, best: { lean: 'it' } } },

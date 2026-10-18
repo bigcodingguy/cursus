@@ -6,11 +6,11 @@ import { emit, on } from '../../bus';
 import { registerAction, registerCommand, type SystemDef } from '../../core';
 import { chance, gauss, pick, rand } from '../../rng';
 import type { Character, CharId, GameState } from '../../types';
-import { ageOf, clamp, fmtHS, fullName, shortName, yearBC } from '../../util';
+import { ageOf, allChars, clamp, fmtHS, fullName, shortName, yearBC } from '../../util';
 import { opinion, willingness } from '../network/api';
 import { officesOf } from '../offices/api';
 import { entryValue } from '../standing/api';
-import { dowryFrom, guardianOf, heirOf, marriageable, marriageOf, sonsOf } from './api';
+import { dowryFrom, guardianOf, invalidateFamilyIndex, heirOf, marriageable, marriageOf, sonsOf } from './api';
 
 const ORDINALS = ['Maior', 'Minor', 'Tertia', 'Quarta', 'Quinta'];
 
@@ -31,10 +31,10 @@ function marryOdds(s: GameState, groom: Character, bride: Character) {
 
 function bornName(s: GameState, father: Character, female: boolean): Pick<Character, 'praenomen' | 'nomen' | 'cognomen'> {
   if (female) {
-    const sisters = Object.values(s.chars).filter((c) => c.female && c.fatherId === father.id).length;
+    const sisters = allChars(s).filter((c) => c.female && c.fatherId === father.id).length;
     return { praenomen: '', nomen: feminine(father.nomen), cognomen: ORDINALS[Math.min(sisters, ORDINALS.length - 1)] };
   }
-  const brothers = Object.values(s.chars).filter((c) => !c.female && c.fatherId === father.id).length;
+  const brothers = allChars(s).filter((c) => !c.female && c.fatherId === father.id).length;
   return { praenomen: brothers === 0 ? father.praenomen : pick(s.rng, PRAENOMINA.slice(0, 9)), nomen: father.nomen, cognomen: father.cognomen };
 }
 
@@ -132,6 +132,7 @@ export const family: SystemDef = {
       const oldFam = son.familyId ? s.families[son.familyId] : undefined;
       son.adoptedFrom = son.familyId ?? undefined;
       son.fatherId = f.id;
+      invalidateFamilyIndex(s);
       son.familyId = f.familyId;
       // He takes his new father's name and keeps his old one as a cognomen: Aemilius becomes Aemilianus.
       son.cognomen = `${son.nomen.replace(/us$/, '')}ianus`;
@@ -214,9 +215,14 @@ export const family: SystemDef = {
       npc: (s, a) => {
         const age = ageOf(s, a);
         if (a.spouseId || age < 22 || age > 50 || a.rank === 'plebs') return [];
-        const women = Object.values(s.chars).filter((w) => w.female && marriageable(s, w) && w.familyId !== a.familyId);
-        if (!women.length) return [];
-        const w = women[Math.floor(rand(s.rng) * women.length)];
+        // Look over a few households rather than the whole city.
+        const all = allChars(s);
+        let w: Character | undefined;
+        for (let i = 0; i < 6 && !w; i++) {
+          const c = all[Math.floor(rand(s.rng) * all.length)];
+          if (c.female && marriageable(s, c) && c.familyId !== a.familyId) w = c;
+        }
+        if (!w) return [];
         return [{ params: { bride: w.id }, utility: 1.2 + (age - 22) / 15 + a.traits.ambition * 0.4 }];
       },
     });
@@ -233,8 +239,8 @@ export const family: SystemDef = {
         const m = marriageOf(s, a.id);
         if (!m || m.husband !== a.id) return [];
         const w = s.chars[m.wife];
-        const g = guardianOf(s, w);
-        return g && opinion(s, a.id, g.id).total < -35 ? [{ params: {}, utility: 1.6 }] : [];
+        const g = w.fatherId ? s.chars[w.fatherId] : undefined;
+        return g?.alive && opinion(s, a.id, g.id).total < -35 ? [{ params: {}, utility: 1.6 }] : [];
       },
     });
 
@@ -270,7 +276,8 @@ export const family: SystemDef = {
       },
       npc: (s, a) => {
         if (ageOf(s, a) < 45 || sonsOf(s, a.id).length || a.rank !== 'senator') return [];
-        const cands = Object.values(s.chars).filter((c) => !c.female && c.alive && ageOf(s, c) >= 10 && ageOf(s, c) <= 25 && c.fatherId && sonsOf(s, c.fatherId).length >= 2);
+        if (rand(s.rng) > 0.1) return [];
+        const cands = allChars(s).filter((c) => !c.female && c.alive && ageOf(s, c) >= 10 && ageOf(s, c) <= 25 && c.fatherId && sonsOf(s, c.fatherId).length >= 2);
         if (!cands.length) return [];
         return [{ params: { son: cands[Math.floor(rand(s.rng) * cands.length)].id }, utility: 1.7 }];
       },
@@ -291,7 +298,7 @@ export const family: SystemDef = {
       if (age < 15 || age > 42) continue;
       // Not while the husband is away on campaign.
       if (h.location === 'abroad' || h.location === 'exile') continue;
-      const recent = Object.values(s.chars).some((c) => c.motherId === w.id && c.bornBC === yearBC(s));
+      const recent = allChars(s).some((c) => c.motherId === w.id && c.bornBC === yearBC(s));
       if (!recent && rand(s.rng) < 0.024) birth(s, h, w);
     }
   },

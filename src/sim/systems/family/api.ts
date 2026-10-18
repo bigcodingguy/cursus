@@ -1,24 +1,44 @@
 // Family queries (pure).
 
 import type { Character, CharId, GameState, Marriage } from '../../types';
-import { ageOf } from '../../util';
+import { ageOf, allChars, charsKey } from '../../util';
+
+// Children indexed by parent, rebuilt when the number of characters changes (and on adoption).
+// Pure cache: derived from state, never stored in it.
+const index = new WeakMap<GameState, { n: number; kids: Map<CharId, Character[]> }>();
+function kidsOf(s: GameState, id: CharId): Character[] {
+  const n = charsKey(s);
+  let ix = index.get(s);
+  if (!ix || ix.n !== n || n < 0) {
+    const kids = new Map<CharId, Character[]>();
+    for (const c of allChars(s)) {
+      for (const p of [c.fatherId, c.motherId]) {
+        if (!p) continue;
+        const l = kids.get(p);
+        if (l) l.push(c);
+        else kids.set(p, [c]);
+      }
+    }
+    for (const l of kids.values()) l.sort((a, b) => b.bornBC - a.bornBC);
+    ix = { n, kids };
+    index.set(s, ix);
+  }
+  return ix.kids.get(id) ?? [];
+}
+export function invalidateFamilyIndex(s: GameState): void {
+  index.delete(s);
+}
 
 export function sonsOf(s: GameState, id: CharId): Character[] {
-  return Object.values(s.chars)
-    .filter((c) => c.alive && !c.female && c.fatherId === id)
-    .sort((a, b) => b.bornBC - a.bornBC);
+  return kidsOf(s, id).filter((c) => c.alive && !c.female && c.fatherId === id);
 }
 
 export function daughtersOf(s: GameState, id: CharId): Character[] {
-  return Object.values(s.chars)
-    .filter((c) => c.alive && c.female && c.fatherId === id)
-    .sort((a, b) => b.bornBC - a.bornBC);
+  return kidsOf(s, id).filter((c) => c.alive && c.female && c.fatherId === id);
 }
 
 export function childrenOf(s: GameState, id: CharId): Character[] {
-  return Object.values(s.chars)
-    .filter((c) => c.fatherId === id || c.motherId === id)
-    .sort((a, b) => b.bornBC - a.bornBC);
+  return kidsOf(s, id).slice();
 }
 
 /** The man who inherits: the heir named in the testament if he still lives, else the eldest son (adopted sons count). */
@@ -41,7 +61,7 @@ export function marriageOf(s: GameState, id: CharId): Marriage | undefined {
 export function guardianOf(s: GameState, woman: Character): Character | undefined {
   const f = woman.fatherId ? s.chars[woman.fatherId] : undefined;
   if (f?.alive) return f;
-  return Object.values(s.chars)
+  return allChars(s)
     .filter((c) => c.alive && !c.female && c.familyId === woman.familyId && c.id !== woman.id && ageOf(s, c) >= 20)
     .sort((a, b) => a.bornBC - b.bornBC)
     .reverse()[0];

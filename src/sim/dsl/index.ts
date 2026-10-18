@@ -8,7 +8,7 @@ import { standingOf } from '../systems/standing/api';
 import { cashOf } from '../systems/money/api';
 import { heldEver, holdsOffice, openElection, voteGap, winChance } from '../systems/offices/api';
 import type { Breakdown, Character, CharId, GameState, OfficeId, StandingKind } from '../types';
-import { ageOf, breakdown, byHistorical, ch, clamp, shortName, yearBC } from '../util';
+import { allChars, ageOf, breakdown, byHistorical, ch, clamp, shortName, yearBC } from '../util';
 
 /** A character reference: 'player', 'player.patron', 'player.father', '@historicalKey', a role name, or 'it'. */
 export type Ref = string;
@@ -132,7 +132,7 @@ export function resolve(s: GameState, ref: Ref, sc: Scope): Character | undefine
 
 export function groupMembers(s: GameState, g: Group, sc: Scope): Character[] {
   const out: Character[] = [];
-  for (const c of Object.values(s.chars)) {
+  for (const c of allChars(s)) {
     if (!c.alive) continue;
     if (g.select !== 'all' && (c.female || ageOf(s, c) < 16)) continue;
     if (g.select === 'senators' && c.rank !== 'senator') continue;

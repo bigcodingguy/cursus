@@ -4,7 +4,7 @@ import { emit, on } from '../../bus';
 import type { SystemDef } from '../../core';
 import { pick, rand } from '../../rng';
 import { heirOf } from '../family/api';
-import { ageOf, clamp, fullName } from '../../util';
+import { allChars, ageOf, clamp, fullName } from '../../util';
 
 const YOUNG_CAUSES = ['a fever caught in the summer heat', 'a fall from his horse on the Campus', 'a wound that turned bad', 'drowning while swimming in the Tiber', 'a sudden fever'];
 const MIDDLE_CAUSES = ['a fever of the marshes', 'a wasting illness', 'a stroke at dinner', 'an illness of the lungs', 'a sickness of the bowels'];
@@ -21,7 +21,7 @@ export const people: SystemDef = {
       c.action = undefined;
       emit(s, 'log', { text: `${fullName(c)} has died (${e.cause}).`, kind: 'death', about: [c.id] });
       emit(s, 'hook', { name: 'death', roles: { dead: c.id } });
-      for (const o of Object.values(s.chars)) if (o.patronId === c.id) o.patronId = null;
+      for (const o of allChars(s)) if (o.patronId === c.id) o.patronId = null;
       if (c.id === s.playerId) {
         // With an heir the family goes on (see the family system); without one, the house is extinct.
         if (!heirOf(s, c.id)) s.ended = { day: s.day, reason: `You died (${e.cause}), leaving no son to carry on the family. The house is extinct.` };
@@ -89,7 +89,7 @@ export const people: SystemDef = {
     });
   },
   daily(s) {
-    for (const c of Object.values(s.chars)) {
+    for (const c of allChars(s)) {
       if (c.alive && c.flags.returnDay !== undefined && s.day >= c.flags.returnDay && c.location !== 'exile') {
         c.location = 'rome';
         delete c.flags.returnDay;
@@ -101,7 +101,7 @@ export const people: SystemDef = {
     }
   },
   monthly(s) {
-    for (const c of Object.values(s.chars)) {
+    for (const c of allChars(s)) {
       if (!c.alive) continue;
       const age = ageOf(s, c);
       // Children die easily.
