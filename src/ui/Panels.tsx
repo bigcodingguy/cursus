@@ -1,0 +1,431 @@
+import { useState } from 'react';
+import { OFFICES, PROVINCES } from '../content/offices';
+import { dateOf } from '../sim/calendar';
+import { convictionChance, evidenceTerm, jurorLean, playerCase } from '../sim/systems/courts/api';
+import { cashOf, debtOf, loansHeldBy, loansOwedBy } from '../sim/systems/money/api';
+import { favorsOwed, memoriesAbout, opinion, tiesOf } from '../sim/systems/network/api';
+import { clientsOf } from '../sim/systems/news';
+import { appealParts, candidacyOf, officesOf, openElection, profileOf, profiles, voteGap, voteOnce, winChance } from '../sim/systems/offices/api';
+import { standingOf } from '../sim/systems/standing/api';
+import type { GameState } from '../sim/types';
+import { ageOf, fmtHS, fullName, shortName } from '../sim/util';
+import { BreakdownTable, leanLabel, Name, Odds, opinionWord, Portrait, shortDate, skillWord, traitWords, useUI, Why } from './common';
+import { run } from './store';
+
+export function PersonPanel({ s, id }: { s: GameState; id: string | null }) {
+  const ui = useUI();
+  const c = id ? s.chars[id] : undefined;
+  if (!c) return <p className="muted">Click a name to see what you know of him.</p>;
+  const me = c.id === s.playerId;
+  const fam = c.familyId ? s.families[c.familyId] : undefined;
+  const op = opinion(s, c.id, s.playerId);
+  const mine = opinion(s, s.playerId, c.id);
+  const mems = memoriesAbout(s, c.id, s.playerId).sort((a, b) => b.day - a.day);
+  const offs = officesOf(s, c.id);
+  const ties = tiesOf(s, c.id).filter((t) => s.chars[t.other]?.alive);
+  const owesMe = favorsOwed(s, c.id, s.playerId);
+  const iOwe = favorsOwed(s, s.playerId, c.id);
+  const dig = standingOf(s, c.id, 'dignitas');
+  const people = standingOf(s, c.id, 'people');
+  const boni = standingOf(s, c.id, 'boni');
+  return (
+    <div>
+      <div className="row" style={{ alignItems: 'flex-start' }}>
+        <Portrait c={c} />
+        <div>
+          <h2 style={{ marginBottom: 0 }}>{fullName(c)}{!c.alive && ' †'}</h2>
+          <div className="small muted">
+            {c.female ? '' : `${ageOf(s, c)} years old · `}
+            {c.rank === 'senator' ? 'senator' : c.rank === 'eques' ? 'of equestrian rank' : 'plebeian'} · {fam?.name ?? 'no great house'} · tribe {c.tribe}
+            {c.location !== 'rome' && c.alive ? ` · ${c.location === 'abroad' ? 'abroad' : c.location}` : ''}
+          </div>
+          {c.died && <div className="small bad">Died {shortDate(c.died.day)}: {c.died.cause}.</div>}
+        </div>
+      </div>
+      {c.bio && <p>{c.bio}</p>}
+      {!c.female && (
+        <p className="small">
+          {traitWords(c).join(', ') || 'unremarkable'}; {leanLabel(c.lean)}. Oratory: {skillWord(c.oratory)}{me ? ` (${Math.round(c.oratory)})` : ''}. Law: {skillWord(c.law)}{me ? ` (${Math.round(c.law)})` : ''}.
+        </p>
+      )}
+      <div className="row small">
+        <span>Dignitas <Why b={dig}><b>{dig.total}</b></Why></span>
+        <span>· People <Why b={people}><b>{people.total}</b></Why></span>
+        <span>· Boni <Why b={boni}><b>{boni.total}</b></Why></span>
+      </div>
+      {!me && c.alive && (
+        <>
+          <h3>What he thinks of you</h3>
+          <div className="card">
+            <Why b={op}>
+              <b>{opinionWord(op.total)}</b> ({op.total > 0 ? '+' : ''}{op.total})
+            </Why>
+            <div className="small" style={{ marginTop: 4 }}>
+              <BreakdownTableLight b={op} />
+            </div>
+          </div>
+          <h4>He remembers</h4>
+          {mems.length ? (
+            <ul className="list small">
+              {mems.map((m, i) => (
+                <li key={i} className="spread">
+                  <span>“{m.act}” · {shortDate(m.day)}</span>
+                  <span className={m.now >= 0 ? 'good' : 'bad'}>{m.now > 0 ? '+' : ''}{m.now.toFixed(1)}{m.halfLife ? '' : ' · never fades'}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="small muted">Nothing you have done, yet.</p>
+          )}
+          <div className="small" style={{ marginTop: 6 }}>
+            You think of him: <Why b={mine}>{opinionWord(mine.total)}</Why>.
+          </div>
+          {(owesMe.length > 0 || iOwe.length > 0) && <h4>Favors</h4>}
+          {owesMe.map((f) => (
+            <div key={f.id} className="small good">He owes you: {f.reason} (weight {f.weight})</div>
+          ))}
+          {iOwe.map((f) => (
+            <div key={f.id} className="small bad">You owe him: {f.reason} (weight {f.weight})</div>
+          ))}
+          <div className="row" style={{ marginTop: 8 }}>
+            <button className="ghost" onClick={() => ui.setPlace(c.home)}>Go to his house</button>
+          </div>
+        </>
+      )}
+      {offs.length > 0 && (
+        <>
+          <h4>Career</h4>
+          <div className="small">{offs.map((o) => `${OFFICES[o.office].label} ${o.yearBC}`).join(' · ')}</div>
+        </>
+      )}
+      {(c.patronId || ties.length > 0 || clientsOf(s, c.id).length > 0) && <h4>Connections</h4>}
+      <div className="small">
+        {c.patronId && <div>Patron: <Name s={s} id={c.patronId} /></div>}
+        {ties.map((t, i) => (
+          <div key={i}>
+            {t.kind === 'amicus' ? 'Friend of' : t.kind === 'inimicus' ? 'Enemy of' : 'Kin to'} <Name s={s} id={t.other} />
+          </div>
+        ))}
+        {clientsOf(s, c.id).length > 0 && <div>Clients: {clientsOf(s, c.id).map((x) => <span key={x.id}><Name s={s} id={x.id} /> </span>)}</div>}
+      </div>
+      {me && (
+        <>
+          <h3>Your purse</h3>
+          <div className="small">
+            Cash {fmtHS(cashOf(s, c.id))} · debts {fmtHS(debtOf(s, c.id))}
+            {c.flags.allowance ? ` · allowance from your father ${fmtHS(c.flags.allowance * 12)} a year` : ''}
+            {s.money.accounts[c.id]?.income ? ` · estates ${fmtHS(s.money.accounts[c.id].income)} a year` : ''} · household {fmtHS(s.money.accounts[c.id]?.upkeep ?? 0)} a year
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function BreakdownTableLight({ b }: { b: { total: number; parts: { label: string; value: number }[] } }) {
+  return (
+    <table className="t">
+      <tbody>
+        {b.parts.map((p, i) => (
+          <tr key={i}>
+            <td>{p.label}</td>
+            <td style={{ textAlign: 'right' }} className={p.value >= 0 ? 'good' : 'bad'}>{p.value > 0 ? '+' : ''}{Math.round(p.value)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export function PeoplePanel({ s }: { s: GameState }) {
+  const [filter, setFilter] = useState<'all' | 'senators' | 'friends' | 'enemies' | 'young'>('all');
+  const rows = Object.values(s.chars)
+    .filter((c) => c.alive && c.id !== s.playerId && !c.female && ageOf(s, c) >= 16)
+    .map((c) => ({ c, op: opinion(s, c.id, s.playerId).total, dig: standingOf(s, c.id, 'dignitas').total }))
+    .filter((r) => (filter === 'senators' ? r.c.rank === 'senator' : filter === 'friends' ? r.op >= 10 : filter === 'enemies' ? r.op <= -10 : filter === 'young' ? ageOf(s, r.c) <= 32 : true))
+    .sort((a, b) => b.dig - a.dig);
+  return (
+    <div>
+      <div className="row" style={{ marginBottom: 6 }}>
+        {(['all', 'senators', 'friends', 'enemies', 'young'] as const).map((f) => (
+          <button key={f} className={`ghost ${filter === f ? 'on' : ''}`} onClick={() => setFilter(f)}>
+            {f}
+          </button>
+        ))}
+      </div>
+      <table className="t">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Age</th>
+            <th>Dignitas</th>
+            <th>Thinks of you</th>
+            <th>Where</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ c, op, dig }) => (
+            <tr key={c.id}>
+              <td><Name s={s} id={c.id} /></td>
+              <td>{ageOf(s, c)}</td>
+              <td>{dig}</td>
+              <td className={op >= 8 ? 'good' : op <= -8 ? 'bad' : ''}>{opinionWord(op)}</td>
+              <td className="muted">{c.location === 'rome' ? c.home : c.location}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function FavorsPanel({ s }: { s: GameState }) {
+  const owed = s.network.favors.filter((f) => f.creditor === s.playerId);
+  const owe = s.network.favors.filter((f) => f.debtor === s.playerId);
+  const lent = loansHeldBy(s, s.playerId);
+  const borrowed = loansOwedBy(s, s.playerId);
+  return (
+    <div>
+      <h3>Owed to you</h3>
+      {owed.length ? owed.map((f) => <div key={f.id} className="card green small"><Name s={s} id={f.debtor} />: {f.reason} <span className="muted">({shortDate(f.day)}, weight {f.weight})</span></div>) : <p className="small muted">No one owes you anything yet. Defend a man, lend him money, endorse him — and he will.</p>}
+      <p className="small muted">Asking a man for something is easier when he owes you; if he grants it, the debt is spent.</p>
+      <h3>You owe</h3>
+      {owe.length ? owe.map((f) => <div key={f.id} className="card red small"><Name s={s} id={f.creditor} />: {f.reason} <span className="muted">({shortDate(f.day)}, weight {f.weight})</span></div>) : <p className="small muted">You owe no favors.</p>}
+      <h3>Money lent and borrowed</h3>
+      {lent.map((l) => <div key={l.id} className="small">You lent <Name s={s} id={l.borrower} /> {fmtHS(l.principal)} at {(l.monthlyRate * 100).toFixed(2)}% a month.</div>)}
+      {borrowed.map((l) => <div key={l.id} className={`small ${l.called ? 'bad' : ''}`}>You owe <Name s={s} id={l.lender} /> {fmtHS(l.principal)} at {(l.monthlyRate * 100).toFixed(2)}% a month, due {shortDate(l.dueDay)}{l.called ? ` — called in, pay by ${shortDate(l.callDeadline!)}` : ''}.</div>)}
+      {!lent.length && !borrowed.length && <p className="small muted">None.</p>}
+      {(() => {
+        const f = s.chars[s.playerId].fatherId;
+        const fl = f ? loansOwedBy(s, f) : [];
+        return fl.length ? (
+          <>
+            <h4>Your father’s debts</h4>
+            {fl.map((l) => <div key={l.id} className={`small ${l.called ? 'bad' : ''}`}>He owes <Name s={s} id={l.lender} /> {fmtHS(l.principal)}{l.called ? ` — called in, due ${shortDate(l.callDeadline!)}` : ''}.</div>)}
+          </>
+        ) : null;
+      })()}
+    </div>
+  );
+}
+
+export function GossipPanel({ s }: { s: GameState }) {
+  const heard = s.news.items.filter((g) => g.heard).sort((a, b) => b.day - a.day);
+  const waiting = s.news.items.filter((g) => !g.heard && g.day <= s.day).length;
+  return (
+    <div>
+      <p className="small muted">Talk in the Forum. It runs ahead of the facts and is sometimes wrong. You hear it in the Forum, at dinner, or from your clients in the morning.</p>
+      {waiting > 0 && <div className="card">There is fresh talk in the Forum you have not heard ({waiting}).</div>}
+      {heard.map((g) => (
+        <div key={g.id} className="card small">
+          <div className="muted">{shortDate(g.day)}</div>
+          {g.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ChroniclePanel({ s }: { s: GameState }) {
+  const e = openElection(s);
+  const pc = playerCase(s);
+  const pl = s.chars[s.playerId];
+  const upcoming: { day: number; text: string }[] = [];
+  if (e) {
+    if (e.professioDeadline >= s.day) upcoming.push({ day: e.professioDeadline, text: 'Last day to declare for the quaestorship' });
+    upcoming.push({ day: e.day, text: 'Quaestorian elections on the Campus Martius' });
+  }
+  if (pc?.trialDay) upcoming.push({ day: pc.trialDay, text: `Your trial: ${shortName(s.chars[pc.defendant])}` });
+  if (pl.flags.returnDay) upcoming.push({ day: pl.flags.returnDay, text: 'You return to Rome' });
+  const y = dateOf(s.day).yearBC;
+  upcoming.push({ day: (133 - y + 1) * 365, text: 'New magistrates take office' });
+  if (dateOf(s.day).month < 5) upcoming.push({ day: (133 - y) * 365 + 151, text: 'Candidacies for the quaestorship open' });
+  for (const l of loansOwedBy(s, s.playerId)) upcoming.push({ day: l.called ? l.callDeadline! : l.dueDay, text: `Loan from ${shortName(s.chars[l.lender])} ${l.called ? 'must be repaid' : 'falls due'}` });
+  upcoming.sort((a, b) => a.day - b.day);
+  const log = [...s.log].reverse().slice(0, 150);
+  return (
+    <div>
+      <h3>Coming</h3>
+      <ul className="list small">
+        {upcoming.map((u, i) => (
+          <li key={i} className="spread">
+            <span>{u.text}</span>
+            <span className="muted">{shortDate(u.day)}</span>
+          </li>
+        ))}
+      </ul>
+      <h3>Chronicle</h3>
+      <ul className="list small">
+        {log.map((l, i) => (
+          <li key={i}>
+            <span className="muted">{shortDate(l.day)}</span> · <span className={l.kind === 'death' ? 'bad' : l.kind === 'player' ? '' : 'muted'}>{l.text}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function CasePanel({ s }: { s: GameState }) {
+  const c = playerCase(s);
+  const ui = useUI();
+  if (!c) {
+    const past = s.courts.cases.filter((x) => x.verdict && (x.prosecutor === s.playerId || x.defender === s.playerId));
+    return (
+      <div>
+        <p className="muted">You have no case in hand. Open cases are listed in the Forum.</p>
+        {past.map((x) => (
+          <div key={x.id} className="card small">
+            {x.prosecutor === s.playerId ? 'You prosecuted' : 'You defended'} {shortName(s.chars[x.defendant])}: {x.verdict} ({x.votes?.convict}–{x.votes?.acquit}), {shortDate(x.verdictDay!)}.
+          </div>
+        ))}
+      </div>
+    );
+  }
+  const side = c.prosecutor === s.playerId ? 'prosecution' : 'defense';
+  const prep = side === 'prosecution' ? c.prosecutionPrep : c.defensePrep;
+  const theirs = side === 'prosecution' ? c.defensePrep : c.prosecutionPrep;
+  const p = convictionChance(s, c);
+  const win = side === 'prosecution' ? p : 1 - p;
+  const ev = evidenceTerm(s, c);
+  const rejected = c.jury.filter((j) => j.rejected && (j as { rejectedBy?: string }).rejectedBy === side).length;
+  return (
+    <div>
+      <h2>{side === 'prosecution' ? 'Prosecuting' : 'Defending'} {shortName(s.chars[c.defendant])}</h2>
+      <p className="small">
+        Charge: extortion as governor of {PROVINCES.find((x) => x.id === c.province)?.label} ({fmtHS(c.extorted)} claimed). Prosecutor <Name s={s} id={c.prosecutor} />; defender{' '}
+        {c.defender ? <Name s={s} id={c.defender} /> : <span className="muted">not yet chosen</span>}. Jury of {c.jury.filter((j) => !j.rejected).length} {c.juryClass === 'senator' ? 'senators' : 'equites'}. Trial on <b>{shortDate(c.trialDay!)}</b>.
+      </p>
+      <div className="card green">
+        If the jury voted today, your chance: <Why b={ev} digits={2} note="Evidence and preparation (log-odds). Each juror adds his own leanings."><Odds p={win} /></Why>
+        <div className="small muted">Preparation: witnesses {prep.witnesses}/3, documents {prep.documents}/3, jury researched {prep.research ? 'yes' : 'no'}, co-counsel {prep.coCounsel ? shortName(s.chars[prep.coCounsel]) : 'none'}. The other side: witnesses {theirs.witnesses}, documents {theirs.documents}.</div>
+        <div className="row" style={{ marginTop: 4 }}>
+          <button className="ghost" onClick={() => ui.setPlace('forum')}>Prepare in the Forum →</button>
+        </div>
+        <div className="small muted">Interview witnesses, search the records and learn the jurors from the Forum; ask a skilled speaker to join you by calling on him.</div>
+      </div>
+      <h3>The jury</h3>
+      {!prep.research && <p className="small muted">You do not know these men’s leanings. Learn the jurors to see them and to reject up to four.</p>}
+      <table className="t">
+        <thead>
+          <tr>
+            <th>Juror</th>
+            <th>Leans</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {c.jury.map((j) => {
+            const lean = jurorLean(s, c, j).total + ev.total + c.sway;
+            const toward = side === 'prosecution' ? lean : -lean;
+            return (
+              <tr key={j.id} style={{ opacity: j.rejected ? 0.4 : 1 }}>
+                <td>{j.charId ? <Name s={s} id={j.charId} /> : j.label}</td>
+                <td>{prep.research ? <Why b={jurorLean(s, c, j)} digits={2}><span className={toward > 0.3 ? 'good' : toward < -0.3 ? 'bad' : ''}>{toward > 0.3 ? 'your way' : toward < -0.3 ? 'against you' : 'undecided'}</span></Why> : <span className="muted">?</span>}</td>
+                <td>{prep.research > 0 && !j.rejected && c.status === 'prep' && rejected < 4 && <button className="ghost" onClick={() => run({ type: 'case.reject', jurorId: j.id })}>Reject</button>}{j.rejected ? 'rejected' : ''}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function ElectionPanel({ s }: { s: GameState }) {
+  const e = openElection(s);
+  const last = [...s.offices.elections].reverse().find((x) => x.status === 'held');
+  if (!e) {
+    return (
+      <div>
+        <p className="muted">No election is open. Candidacies for the quaestorship open on the Kalends of Iunius; the vote is on the 25th of Quintilis.</p>
+        {last?.results && (
+          <>
+            <h3>Last year: quaestors for {last.forYearBC} BC</h3>
+            <div className="small">{last.results.winners.map((w) => <span key={w}><Name s={s} id={w} /> · </span>)}</div>
+          </>
+        )}
+      </div>
+    );
+  }
+  const profs = profiles(s, e);
+  const proj = voteOnce(e, profs, null);
+  const mine = candidacyOf(s, s.playerId);
+  const chance = mine ? winChance(s, e, s.playerId) : null;
+  const gap = mine ? voteGap(s, e, s.playerId) : 0;
+  const ranked = [...profs].sort((a, b) => proj.tally[b.who].tribes - proj.tally[a.who].tribes || proj.tally[b.who].votes - proj.tally[a.who].votes);
+  const myProf = mine ? profileOf(s, mine) : null;
+  return (
+    <div>
+      <h2>Quaestorship for {e.forYearBC} BC</h2>
+      <p className="small">
+        {e.seats} seats. Declare by {shortDate(e.professioDeadline)}. Vote on <b>{shortDate(e.day)}</b>
+        {e.postponements ? ` (postponed ${e.postponements}×)` : ''}. Each of the 35 tribes returns its top {e.seats}; the men who carry the most tribes are elected.
+      </p>
+      {mine && (
+        <div className="card green">
+          Your chance of election: <Why b={{ total: chance!, parts: [{ label: `Share of ${200} simulated votes you win`, value: chance! }] }} asPct note="The real vote is one of these simulations, picked at random."><Odds p={chance!} /></Why>
+          {gap > 0 && <div className="small">On the expected count you are about {gap.toLocaleString('en-US')} votes short in the tribes that would put you in.</div>}
+          {myProf && (
+            <div className="small">
+              Your pull in a country tribe: <Why b={{ total: appealParts(myProf, 'Romilia').reduce((a, x) => a + x.value, 0), parts: appealParts(myProf, 'Romilia') }} digits={2}>Romilia</Why> · in a city tribe: <Why b={{ total: appealParts(myProf, 'Suburana').reduce((a, x) => a + x.value, 0), parts: appealParts(myProf, 'Suburana') }} digits={2}>Suburana</Why>
+            </div>
+          )}
+        </div>
+      )}
+      <table className="t">
+        <thead>
+          <tr>
+            <th>Candidate</th>
+            <th>Dignitas</th>
+            <th>People</th>
+            <th>Boni</th>
+            <th>Tribes (expected)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ranked.map((p, i) => (
+            <tr key={p.who} className={p.who === s.playerId ? 'me' : ''}>
+              <td>{i < e.seats ? '● ' : '○ '}<Name s={s} id={p.who} /></td>
+              <td>{p.dig}</td>
+              <td>{p.people}</td>
+              <td>{p.boni}</td>
+              <td>{proj.tally[p.who].tribes}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {mine && (
+        <>
+          <h3>Tribe by tribe (expected)</h3>
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Tribe</th>
+                <th>Your votes</th>
+                <th>Last seat</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {proj.tribes.map((t) => {
+                const lastSeat = t.votes[t.carried[t.carried.length - 1]];
+                const inn = t.carried.includes(s.playerId);
+                return (
+                  <tr key={t.tribe}>
+                    <td>{t.tribe}</td>
+                    <td>{t.votes[s.playerId]}</td>
+                    <td className="muted">{lastSeat}</td>
+                    <td className={inn ? 'good' : 'bad'}>{inn ? 'carried' : `short ${lastSeat - t.votes[s.playerId] + 1}`}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  );
+}
+
+export { BreakdownTable };

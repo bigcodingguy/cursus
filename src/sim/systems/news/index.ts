@@ -17,6 +17,9 @@ export function playerHearsToday(s: GameState): boolean {
   const p = s.chars[s.playerId];
   if (!p.alive || p.location !== 'rome') return false;
   if (s.routine === 'receive' && clientsOf(s, p.id).length > 0) return true;
+  // Following your patron down to the Forum each morning, you hear what is said there.
+  const pat = p.patronId ? s.chars[p.patronId] : undefined;
+  if (s.routine === 'attend' && pat?.alive && pat.location === 'rome') return true;
   const act = p.action ? getAction(p.action.id) : undefined;
   return !!act && typeof act.place === 'string' && act.place === 'forum';
 }

@@ -14,7 +14,7 @@ export function standingOf(s: GameState, id: CharId, kind: StandingKind): Breakd
   if (kind === 'dignitas') {
     const fam = c.familyId ? s.families[c.familyId] : undefined;
     if (fam?.patrician) parts.push({ label: 'Patrician birth', value: 5 });
-    if (fam && fam.consulAncestors) parts.push({ label: `${fam.consulAncestors} consuls among his ancestors`, value: Math.min(30, fam.consulAncestors * 6) });
+    if (fam && fam.consulAncestors) parts.push({ label: `${fam.consulAncestors} consuls among his ancestors`, value: Math.min(20, fam.consulAncestors * 4) });
     if (fam && fam.praetorAncestors) parts.push({ label: 'Praetorian ancestors', value: Math.min(9, fam.praetorAncestors * 3) });
     if (c.rank === 'senator') parts.push({ label: 'Member of the Senate', value: 10 });
     if (c.rank === 'eques') parts.push({ label: 'Equestrian rank', value: 3 });

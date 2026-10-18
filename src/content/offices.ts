@@ -11,12 +11,12 @@ export interface OfficeDef {
 
 export const OFFICES: Record<OfficeId, OfficeDef> = {
   military_tribune: { id: 'military_tribune', label: 'Military tribune', minAge: 17, dignitas: 4, makesSenator: false },
-  quaestor: { id: 'quaestor', label: 'Quaestor', minAge: 27, dignitas: 10, makesSenator: true },
+  quaestor: { id: 'quaestor', label: 'Quaestor', minAge: 27, dignitas: 8, makesSenator: true },
   tribune_pleb: { id: 'tribune_pleb', label: 'Tribune of the plebs', minAge: 27, dignitas: 6, makesSenator: false },
   aedile: { id: 'aedile', label: 'Aedile', minAge: 36, dignitas: 8, makesSenator: true },
-  praetor: { id: 'praetor', label: 'Praetor', minAge: 39, dignitas: 15, makesSenator: true },
-  consul: { id: 'consul', label: 'Consul', minAge: 42, dignitas: 25, makesSenator: true },
-  censor: { id: 'censor', label: 'Censor', minAge: 45, dignitas: 10, makesSenator: true },
+  praetor: { id: 'praetor', label: 'Praetor', minAge: 39, dignitas: 12, makesSenator: true },
+  consul: { id: 'consul', label: 'Consul', minAge: 42, dignitas: 18, makesSenator: true },
+  censor: { id: 'censor', label: 'Censor', minAge: 45, dignitas: 8, makesSenator: true },
 };
 
 /** Quaestorian election: seats, timing. Voting on a.d. VIII Kal. Sext. (25 Quintilis). */

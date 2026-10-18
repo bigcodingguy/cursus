@@ -61,7 +61,8 @@ export type Cond =
   | { patronOf: [Ref, Ref] } // [patron, client]
   | { candidate: Ref }
   | { inHouse: Ref; house: string }
-  | { female: Ref };
+  | { female: Ref }
+  | { someone: Group };
 
 export interface Group {
   select: 'senators' | 'adultMen' | 'all';
@@ -247,6 +248,7 @@ export function evalCond(s: GameState, c: Cond, sc: Scope): boolean {
   }
   if ('inHouse' in c) return resolve(s, c.inHouse, sc)?.familyId === c.house;
   if ('female' in c) return !!resolve(s, c.female, sc)?.female;
+  if ('someone' in c) return groupMembers(s, c.someone, sc).length > 0;
   if ('patronOf' in c) {
     const a = resolve(s, c.patronOf[0], sc);
     const b = resolve(s, c.patronOf[1], sc);
@@ -385,7 +387,10 @@ function applyEffect(s: GameState, e: Effect, sc: Scope): void {
 /** Replaces {ref} with a short name and {var:x} with a variable. */
 export function renderText(s: GameState, t: string, sc: Scope): string {
   return t.replace(/\{([^}]+)\}/g, (_m, key: string) => {
-    if (key.startsWith('var:')) return String(sc.vars[key.slice(4)] ?? '');
+    if (key.startsWith('var:')) {
+      const v = sc.vars[key.slice(4)];
+      return typeof v === 'number' && Math.abs(v) >= 10000 ? v.toLocaleString('en-US') : String(v ?? '');
+    }
     const c = resolve(s, key, sc);
     return c ? shortName(c) : 'someone';
   });

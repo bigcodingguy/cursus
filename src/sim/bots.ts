@@ -34,7 +34,7 @@ export const STRATEGIES: Record<StrategyId, Strategy> = {
     id: 'orator',
     label: 'Orator (courts and speeches)',
     routine: 'attend',
-    prefs: { intro: ['Scaevola'], capitol: ['Get off'], aventine: ['Bar your door'], popillian_court: ['Face'], creditor_warning: ['Press on'], asked_to_defend: ['Accept'], father_loan_called: ['Send him'] },
+    prefs: { intro: ['Scaevola'], capitol: ['Get off'], aventine: ['Bar your door'], popillian_court: ['Face'], creditor_warning: ['Press on'], creditor_warning_own: ['Press on'], asked_to_defend: ['Accept'], father_loan_called: ['Send him'] },
     stance: (_s, popular) => popular,
     speakEvery: 14,
     prosecuteFromAge: 20,
@@ -44,7 +44,7 @@ export const STRATEGIES: Record<StrategyId, Strategy> = {
     id: 'populist',
     label: 'Populist (the people and the Gracchi)',
     routine: 'receive',
-    prefs: { intro: ['Appius'], octavius_veto: ['Stand in the Forum'], octavius_deposed: ['Vote to depose'], capitol: ['Stand with Tiberius'], popillian_court: ['Leave'], scipio_italians: ['must go on'], gaius_laws: ['Throw yourself'], aventine: ['Bar your door'], creditor_warning: ['Press on'], asked_to_defend: ['Decline'], father_loan_called: ['Send him'] },
+    prefs: { intro: ['Appius'], octavius_veto: ['Stand in the Forum'], octavius_deposed: ['Vote to depose'], capitol: ['Stand with Tiberius'], popillian_court: ['Leave'], scipio_italians: ['must go on'], gaius_laws: ['Throw yourself'], aventine: ['Bar your door'], creditor_warning: ['Press on'], creditor_warning_own: ['Press on'], asked_to_defend: ['Decline'], father_loan_called: ['Send him'] },
     stance: (_s, popular) => popular,
     speakEvery: 18,
     prosecuteFromAge: 23,
@@ -54,7 +54,7 @@ export const STRATEGIES: Record<StrategyId, Strategy> = {
     id: 'establishment',
     label: 'Establishment climber (the boni)',
     routine: 'attend',
-    prefs: { intro: ['Nasica'], octavius_veto: ['sacred'], octavius_deposed: ['Vote against'], capitol: ['Go with the senators', 'Get off'], scipio_italians: ['Scipio is right'], scipio_death: ['Keep'], gaius_laws: ['Join those'], aventine: ['Arm yourself'], creditor_warning: ['Drop'], asked_to_defend: ['Accept'], father_loan_called: ['drop the case'] },
+    prefs: { intro: ['Nasica'], octavius_veto: ['sacred'], octavius_deposed: ['Vote against'], capitol: ['Go with the senators', 'Get off'], scipio_italians: ['Scipio is right'], scipio_death: ['Keep'], gaius_laws: ['Join those'], aventine: ['Arm yourself'], creditor_warning: ['Drop'], creditor_warning_own: ['Drop'], asked_to_defend: ['Accept'], father_loan_called: ['drop the case'] },
     stance: (_s, popular) => (popular === 'for' ? 'against' : 'for'),
     speakEvery: 30,
     prosecuteFromAge: 99,
@@ -250,7 +250,7 @@ export function runLifetime(seed: number, strategyId: StrategyId, opts: { untilD
     decide(s, st);
     handlePending(s, st);
     if (blockedBy(s)) continue;
-    if (s.events.fired.creditor_warning !== undefined && creditorCaseAge === undefined) creditorCaseAge = ageOf(s, player(s));
+    if ((s.events.fired.creditor_warning !== undefined || s.events.fired.creditor_warning_own !== undefined) && creditorCaseAge === undefined) creditorCaseAge = ageOf(s, player(s));
     const d = dateOf(s.day);
     if (d.doy === 0 || s.day === s.startDay) {
       cashByYear[d.yearBC] = cashOf(s, s.playerId);

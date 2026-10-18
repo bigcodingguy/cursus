@@ -74,8 +74,7 @@ function declare(s: GameState, who: CharId) {
   const groundwork = s.offices.groundwork[who] ?? {};
   e.candidates.push({ who, canvass: { ...groundwork }, bribes: {}, endorsements: [], declaredDay: s.day });
   delete s.offices.groundwork[who];
-  const c = s.chars[who];
-  emit(s, 'log', { text: `${fullName(c)} declares himself a candidate for the quaestorship.`, kind: 'election', about: [who] });
+  if (who === s.playerId) emit(s, 'log', { text: 'You give your name to the consul as a candidate for the quaestorship.', kind: 'player' });
 }
 
 /** Men from houses outside the cast who come forward. They join the cast and play by its rules. */
@@ -85,13 +84,19 @@ function spawnOutsiders(s: GameState, e: Election) {
   let n = 0;
   while (e.candidates.length < want && n++ < 20) {
     const id = `c${s.nextCharId++}`;
-    const nomenFull = pick(s.rng, OUTSIDE_NOMINA).split(' ');
+    let nomenFull = pick(s.rng, OUTSIDE_NOMINA).split(' ');
+    let praenomen = pick(s.rng, PRAENOMINA);
+    // Avoid two living men with the same name.
+    for (let k = 0; k < 10 && Object.values(s.chars).some((c) => c.alive && c.praenomen === praenomen && c.nomen === nomenFull[0] && c.cognomen === nomenFull[1]); k++) {
+      nomenFull = pick(s.rng, OUTSIDE_NOMINA).split(' ');
+      praenomen = pick(s.rng, PRAENOMINA);
+    }
     const anc = randInt(s.rng, 0, 3);
     const famId = `out_${id}`;
     s.families[famId] = { id: famId, name: nomenFull[0], patrician: false, consulAncestors: anc, praetorAncestors: randInt(s.rng, 0, 2), home: 'carinae' };
     const bornBC = e.forYearBC + randInt(s.rng, 27, 33);
     const c: Character = {
-      id, praenomen: pick(s.rng, PRAENOMINA), nomen: nomenFull[0], cognomen: nomenFull[1], female: false, familyId: famId, bornBC, alive: true,
+      id, praenomen, nomen: nomenFull[0], cognomen: nomenFull[1], female: false, familyId: famId, bornBC, alive: true,
       rank: 'eques', traits: { ambition: 0.6 + 0.4 * rand(s.rng), greed: rand(s.rng), boldness: rand(s.rng), loyalty: rand(s.rng), sociability: rand(s.rng), pride: rand(s.rng) },
       lean: clamp(0.2 + 0.5 * gauss(s.rng), -1, 1), oratory: 25 + 30 * rand(s.rng), law: 20 + 30 * rand(s.rng), location: 'rome', home: 'carinae',
       tribe: pick(s.rng, TRIBES), servedAbroad: randInt(s.rng, 1, 4), busyUntil: 0, nextThink: s.day + randInt(s.rng, 1, 7), flags: { outsider: 1 },
@@ -218,8 +223,9 @@ export const offices: SystemDef = {
           if (cand) for (const t of z.tribes) cand.bribes[t] = (cand.bribes[t] ?? 0) + gifts / z.tribes.length;
           emit(s, 'standing', { who: a.id, kind: 'boni', value: -Math.min(15, gifts / 3000), label: 'Talk of bribery (ambitus)' });
           emit(s, 'standing', { who: a.id, kind: 'people', value: Math.min(6, gifts / 6000), label: 'Generous to voters' });
-          a.flags.ambitus = (a.flags.ambitus ?? 0) + gifts;
-          emit(s, 'news', { text: `Money is changing hands in the tribes for ${shortName(a)}, they say.`, truth: 'true', delay: 3, about: [a.id] });
+          const before = a.flags.ambitus ?? 0;
+          a.flags.ambitus = before + gifts;
+          if (Math.floor(before / 20000) !== Math.floor(a.flags.ambitus / 20000) || a.id === s.playerId) emit(s, 'news', { text: `Money is changing hands in the tribes for ${shortName(a)}, they say.`, truth: 'true', delay: 3, about: [a.id] });
         }
         emit(s, 'standing', { who: a.id, kind: 'people', value: p.zone === 'subura' ? 1.5 : 0.8, label: 'Seen canvassing' });
       },

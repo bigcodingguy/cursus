@@ -152,18 +152,18 @@ export function newGame(opts: NewGameOptions): GameState {
   const famId = 'player_house';
   s.families[famId] = { id: famId, name: `${nomen.replace(/us$/, 'i')} of Arpinum`, patrician: false, consulAncestors: 0, praetorAncestors: 0, home: 'carinae' };
   const father = add(
-    { praenomen: pick(r, ['Marcus', 'Lucius', 'Gaius']), nomen, female: false, familyId: famId, bornBC: 183, rank: 'eques', traits: traits(r, { loyalty: 0.8 }), lean: 0.1, oratory: 30, law: 30, location: 'arpinum', home: 'carinae', tribe: 'Cornelia', bio: 'Your father: an equestrian of Arpinum with olive groves, a mill, and debts in Rome.' },
+    { praenomen: pick(r, ['Marcus', 'Lucius', 'Gaius', 'Quintus'].filter((x) => x !== (opts.praenomen ?? 'Marcus'))), nomen, female: false, familyId: famId, bornBC: 183, rank: 'eques', traits: traits(r, { loyalty: 0.8 }), lean: 0.1, oratory: 30, law: 30, location: 'arpinum', home: 'carinae', tribe: 'Cornelia', bio: 'Your father: an equestrian of Arpinum with olive groves, a mill, and debts in Rome.' },
     30000, 60000, 25000,
   );
   add({ praenomen: '', nomen: `${nomen.replace(/us$/, 'a')}`, female: true, familyId: famId, bornBC: 172, rank: 'eques', traits: traits(r), lean: 0, oratory: 20, law: 10, location: 'arpinum', home: 'carinae', tribe: 'Cornelia', bio: 'Your mother, at home in Arpinum.' }, 0, 0, 0);
   const pl = add(
-    { praenomen: opts.praenomen ?? 'Marcus', nomen, female: false, familyId: famId, bornBC: 149, rank: 'eques', traits: traits(r, { ambition: 0.9, sociability: 0.6, pride: 0.3, loyalty: 0.6, boldness: 0.6, greed: 0.4 }), lean: 0, oratory: 22, law: 12, location: 'rome', home: 'carinae', tribe: 'Cornelia', fatherId: father.id, patronId: null, bio: 'You. Sixteen, newly in the toga of manhood, sent to Rome to make a name.' },
+    { praenomen: opts.praenomen ?? 'Marcus', nomen, female: false, familyId: famId, bornBC: 149, rank: 'eques', traits: traits(r, { ambition: 0.9, sociability: 0.6, pride: 0.3, loyalty: 0.6, boldness: 0.6, greed: 0.4 }), lean: 0, oratory: 22, law: 12, location: 'rome', home: 'carinae', tribe: 'Cornelia', fatherId: father.id, patronId: null, bio: 'You. Of Arpinum, sent to Rome in 133 BC, newly in the toga of manhood, to make a name.' },
     15000, 0, 9000,
   );
   pl.flags.allowance = 1000;
   s.playerId = pl.id;
   const aufidius = byHistorical(s, 'aufidius')!;
-  emit(s, 'loan.make', { lender: aufidius.id, borrower: father.id, amount: 150000, months: 24, monthlyRate: 0.01 });
+  emit(s, 'loan.make', { lender: aufidius.id, borrower: father.id, amount: 150000, months: 24, monthlyRate: 0.01, preexisting: true });
 
   // Ties already in place in 133 BC.
   const tie = (a: string, b: string, kind: 'amicus' | 'inimicus' | 'kin') => {

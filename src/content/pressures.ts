@@ -27,7 +27,7 @@ export const PRESSURES: PressureDef[] = [
 ];
 
 export const STABILITY = {
-  start: 62,
+  start: 68,
   drift: {
     base: 0.15,
     label: 'Ordinary life resumes',

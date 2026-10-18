@@ -29,7 +29,8 @@ export interface BusEvents {
   lean: { who: CharId; add: number };
   skill: { who: CharId; skill: 'oratory' | 'law'; add: number };
   travel: { who: CharId; to: 'rome' | 'abroad' | 'arpinum' | 'exile'; until?: number };
-  'loan.make': { lender: CharId; borrower: CharId; amount: number; months: number; monthlyRate?: number };
+  /** preexisting: an old debt, recorded without moving money now. */
+  'loan.make': { lender: CharId; borrower: CharId; amount: number; months: number; monthlyRate?: number; preexisting?: boolean };
   'loan.call': { loanId: number };
   'loan.forgiveCall': { loanId: number };
   bankrupt: { who: CharId };

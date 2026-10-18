@@ -96,7 +96,7 @@ export const people: SystemDef = {
       // Slice rule: no natural death for the player until heirs exist (Phase 3). See DECISIONS.md.
       if (c.id === s.playerId) continue;
       const age = ageOf(s, c);
-      const q = Math.min(0.5, 0.002 * Math.exp(0.085 * Math.max(0, age - 16)));
+      const q = Math.min(0.5, 0.0015 * Math.exp(0.08 * Math.max(0, age - 16)));
       const monthly = 1 - Math.pow(1 - q, 1 / 12);
       if (rand(s.rng) < monthly) emit(s, 'death', { who: c.id, cause: age > 55 ? 'old age and illness' : 'a fever' });
     }

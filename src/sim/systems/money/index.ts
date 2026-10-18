@@ -26,8 +26,11 @@ export const money: SystemDef = {
     });
     on('loan.make', (s, e) => {
       const amt = Math.round(e.amount);
-      if (amt <= 0 || cashOf(s, e.lender) < amt) return;
-      emit(s, 'transfer', { from: e.lender, to: e.borrower, amount: amt, reason: 'loan' });
+      if (amt <= 0) return;
+      if (!e.preexisting) {
+        if (cashOf(s, e.lender) < amt) return;
+        emit(s, 'transfer', { from: e.lender, to: e.borrower, amount: amt, reason: 'loan' });
+      }
       s.money.loans.push({
         id: s.money.nextLoanId++, lender: e.lender, borrower: e.borrower, principal: amt,
         monthlyRate: e.monthlyRate ?? STANDARD_RATE, startDay: s.day, dueDay: s.day + Math.round(e.months * 30.4), called: false,
@@ -149,6 +152,15 @@ function settle(s: GameState, loanId: number) {
     return;
   }
   if (cash > 0) emit(s, 'transfer', { from: l.borrower, to: l.lender, amount: cash, reason: 'repayment' });
+  // The rest comes out of his land, sold at auction at a forced-sale price.
+  const short = l.principal - cash;
+  const acct = s.money.accounts[l.borrower];
+  if (acct && acct.income > 0 && short > 0) {
+    const landValue = (acct.income / 0.06) * 0.7;
+    const sold = Math.min(1, short / landValue);
+    emit(s, 'transfer', { from: null, to: l.lender, amount: Math.min(short, landValue), reason: 'estates sold at auction' });
+    acct.income = Math.round(acct.income * (1 - sold));
+  }
   s.money.loans = s.money.loans.filter((x) => x.id !== loanId);
   emit(s, 'bankrupt', { who: l.borrower });
   emit(s, 'standing', { who: l.borrower, kind: 'dignitas', value: -15, label: 'Defaulted on a debt', halfLife: 0 });

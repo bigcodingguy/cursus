@@ -31,17 +31,21 @@ const KILL_TIBERIUS: Effect[] = [
   { log: 'Tiberius Gracchus and some three hundred of his followers are killed on the Capitol by senators led by Scipio Nasica.' },
 ];
 
+/** In 121 BC the hard-line consul (historically Opimius) leads the Senate's response. */
+const hardlineConsul = { select: 'senators' as const, where: { all: [{ holds: 'it', office: 'consul' as const }, { num: { lean: 'it' }, gte: 0.4 }] } };
+
 const KILL_GAIUS: Effect[] = [
   { kill: '@c_gracchus', cause: 'killed in the grove of Furrina, across the Tiber' },
   { kill: '@fulvius', cause: 'killed on the Aventine' },
   { forEach: { select: 'adultMen', where: { all: [{ inHouse: 'it', house: 'fulvii' }, { inRome: 'it' }, { not: { same: ['it', 'player'] } }] } }, do: [{ kill: 'it', cause: 'killed with his father on the Aventine' }] },
   { flag: 'gaius_dead' },
   { stability: -22, label: 'Massacre on the Aventine' },
-  { standing: { who: '@opimius', kind: 'boni', value: 12, label: 'Put down Gaius Gracchus' } },
-  { standing: { who: '@opimius', kind: 'people', value: -25, label: 'Butcher of the Aventine', halfLife: 3000 } },
-  { memory: { owner: { select: 'adultMen', where: { num: { lean: 'it' }, lte: -0.4 } }, about: '@opimius', act: 'Butchered the Gracchans', weight: -30, halfLife: 4000 } },
-  { news: 'They say three thousand have been strangled in the prison since the Aventine. Opimius has had a temple of Concord built. Someone wrote beneath its inscription: “a work of discord makes a temple of Concord.”', truth: 'true', delay: 3 },
-  { log: 'Gaius Gracchus and Marcus Fulvius Flaccus are killed after the consul Opimius arms the Senate’s supporters under its first emergency decree.' },
+  { standing: { who: 'consul', kind: 'boni', value: 12, label: 'Put down Gaius Gracchus' } },
+  { standing: { who: 'consul', kind: 'people', value: -25, label: 'Butcher of the Aventine', halfLife: 3000 } },
+  { charFlag: 'consul', key: 'killed_gaius' },
+  { memory: { owner: { select: 'adultMen', where: { num: { lean: 'it' }, lte: -0.4 } }, about: 'consul', act: 'Butchered the Gracchans', weight: -30, halfLife: 4000 } },
+  { news: 'They say three thousand have been strangled in the prison since the Aventine. {consul} has had a temple of Concord built. Someone wrote beneath its inscription: “a work of discord makes a temple of Concord.”', truth: 'true', delay: 3 },
+  { log: 'Gaius Gracchus and Marcus Fulvius Flaccus are killed after the consul {consul} arms the Senate’s supporters under its first emergency decree.' },
 ];
 
 export const EVENTS: EventDef[] = [
@@ -54,6 +58,11 @@ export const EVENTS: EventDef[] = [
       'You came down the Via Latina with two slaves, a mule, and your father’s letters. Arpinum is three days behind you; ahead is the city, louder and dirtier than anyone said.',
       'Your father has rented you a narrow house in the Carinae and paid a year ahead. His letters of introduction will open three doors. A young man without a patron is nobody in Rome. Whose morning salutatio will you attend?',
       'This year the tribune Tiberius Gracchus has put a bill to the people to share out the public land the rich have occupied. The city talks of nothing else.',
+    ],
+    immediate: [
+      { news: 'They say Octavius, Tiberius’s own colleague, will veto the land bill. Half the Senate has been to his house.', truth: 'true', delay: 0 },
+      { news: 'Nasica swears he will not give up an acre of the land his grandfather farmed. “Let Gracchus come and measure it,” he says.', truth: 'unconfirmed', delay: 0 },
+      { news: 'The bill will give every poor citizen thirty iugera and a pair of oxen, men are saying in the Subura.', truth: 'false', delay: 0 },
     ],
     choices: [
       { label: 'Scipio Nasica, the pontifex maximus — the old order, and the old money', effects: [{ setPatron: ['player', '@nasica'] }, { memory: { owner: '@nasica', about: 'player', act: 'Brought a letter from a friend', weight: 10, halfLife: 900 } }], text: 'Nasica’s steward reads the letter, and you are told to come back at dawn with the others.' },
@@ -166,7 +175,7 @@ export const EVENTS: EventDef[] = [
       },
       {
         label: 'Go with the senators',
-        when: { senator: 'player.patron' },
+        when: patronAmongKillers,
         effects: [...KILL_TIBERIUS, { flag: 'player_killer' }, { charFlag: 'player', key: 'killed_tiberius' }, { lean: 'player', add: 0.2 }, { standing: { who: 'player', kind: 'boni', value: 10, label: 'Went up the Capitol with Nasica' } }, { standing: { who: 'player', kind: 'people', value: -12, label: 'Among the killers of Tiberius Gracchus', halfLife: 3000 } }, { memory: { owner: '@nasica', about: 'player', act: 'Followed me up the Capitol', weight: 20, halfLife: 3000 } }, { memory: { owner: 'patron', about: 'player', act: 'Stood beside me on the Capitol', weight: 15, halfLife: 3000 } }, { memory: { owner: '@c_gracchus', about: 'player', act: 'Was among my brother’s murderers', weight: -45, halfLife: 0 } }, { memory: { owner: '@cornelia', about: 'player', act: 'Was among my son’s murderers', weight: -40, halfLife: 0 } }],
         text: 'You fall in behind the senators. Nobody stops you. You do not strike anyone, or you tell yourself so afterwards; the crush is too great to know. At the end of it Tiberius Gracchus is dead by the temple doors, and in the evening the bodies go into the Tiber.',
       },
@@ -317,7 +326,7 @@ export const EVENTS: EventDef[] = [
   {
     id: 'fregellae',
     title: 'Fregellae',
-    when: { all: [{ flag: 'fulvius_bill' }, { year: [125, 124] }] },
+    when: { all: [{ flag: 'fulvius_bill' }, { year: [125, 124] }, { alive: '@opimius' }] },
     hazard: 0.02,
     player: true,
     text: 'Fregellae, a Latin colony loyal through every war, has risen against Rome. The praetor Lucius Opimius has taken it — by treachery from within, they say — and razed it to the ground.',
@@ -369,12 +378,14 @@ export const EVENTS: EventDef[] = [
   {
     id: 'antyllius',
     title: 'Blood at the sacrifice',
-    when: { all: [{ holds: '@opimius', office: 'consul' }, { flag: 'junonia' }, { alive: '@c_gracchus' }, { after: [121, 1, 15] }] },
+    when: { all: [{ someone: hardlineConsul }, { flag: 'junonia' }, { alive: '@c_gracchus' }, { after: [121, 1, 15] }] },
     hazard: 0.03,
     player: true,
+    roles: { consul: { pick: hardlineConsul, best: { lean: 'it' } } },
+    needs: ['consul'],
     text: [
-      'The Senate means to repeal the colony at Carthage. At the sacrifice before the assembly, one of Opimius’s attendants, Quintus Antyllius, shoved at Gaius’s men and called them scum. They stabbed him with their writing styluses.',
-      'Opimius has had the body carried through the Forum on a bier. The Senate has voted that the consul should see to it that the Republic takes no harm. It has never said such a thing before.',
+      'The Senate means to repeal the colony at Carthage. At the sacrifice before the assembly, one of the consul {consul}’s attendants, Quintus Antyllius, shoved at Gaius’s men and called them scum. They stabbed him with their writing styluses.',
+      '{consul} has had the body carried through the Forum on a bier. The Senate has voted that the consul should see to it that the Republic takes no harm. It has never said such a thing before.',
     ],
     immediate: [{ flag: 'scu' }, { stability: -10, label: 'The Senate’s last decree' }],
     choices: [{ label: 'Then it will come to swords' }],
@@ -385,19 +396,20 @@ export const EVENTS: EventDef[] = [
     when: { all: [{ flag: 'scu' }, { alive: '@c_gracchus' }, inRome, { noFlag: 'aventine_done' }] },
     hazard: 0.5,
     player: true,
-    roles: { patron: 'player.patron' },
+    roles: { patron: 'player.patron', consul: { pick: hardlineConsul, best: { lean: 'it' } } },
+    needs: ['consul'],
     text: [
-      'Opimius has summoned the senators and the equites to come armed, each with two slaves. Gaius Gracchus and Fulvius Flaccus have occupied the temple of Diana on the Aventine with their followers. Fulvius has sent his younger son, a boy, with a herald’s staff to ask for terms. Opimius has sent the boy back with orders to bring no more messages.',
-      'Opimius has offered the weight of Gaius’s head in gold to whoever brings it.',
+      'The consul {consul} has summoned the senators and the equites to come armed, each with two slaves. Gaius Gracchus and Fulvius Flaccus have occupied the temple of Diana on the Aventine with their followers. Fulvius has sent his younger son, a boy, with a herald’s staff to ask for terms. {consul} has sent the boy back with orders to bring no more messages.',
+      '{consul} has offered the weight of Gaius’s head in gold to whoever brings it.',
     ],
     immediate: [{ flag: 'aventine_done' }],
     choices: [
-      { label: 'Arm yourself and answer the consul’s summons', effects: [...KILL_GAIUS, { flag: 'player_aventine_killer' }, { standing: { who: 'player', kind: 'boni', value: 10, label: 'Answered the consul’s summons' } }, { standing: { who: 'player', kind: 'people', value: -12, label: 'Marched on the Aventine', halfLife: 3000 } }, { memory: { owner: '@opimius', about: 'player', act: 'Came armed when I called', weight: 20, halfLife: 3000 } }, { lean: 'player', add: 0.15 }], text: 'There is a little fighting on the slopes, and then Cretan archers, and then it is a hunt. Gaius gets across the river before his slave kills him at his order. Septimuleius, who was once his friend, fills the head with lead before he weighs it.' },
+      { label: 'Arm yourself and answer the consul’s summons', effects: [...KILL_GAIUS, { flag: 'player_aventine_killer' }, { standing: { who: 'player', kind: 'boni', value: 10, label: 'Answered the consul’s summons' } }, { standing: { who: 'player', kind: 'people', value: -12, label: 'Marched on the Aventine', halfLife: 3000 } }, { memory: { owner: 'consul', about: 'player', act: 'Came armed when I called', weight: 20, halfLife: 3000 } }, { lean: 'player', add: 0.15 }], text: 'There is a little fighting on the slopes, and then Cretan archers, and then it is a hunt. Gaius gets across the river before his slave kills him at his order. Septimuleius, who was once his friend, fills the head with lead before he weighs it.' },
       {
         label: 'Go up the Aventine to stand with Gaius',
         risk: {
           chance: { base: 0.55, label: 'Getting out alive', mods: [{ label: 'Young and quick', when: { num: { age: 'player' }, lte: 32 }, add: 0.1 }] },
-          success: [...KILL_GAIUS, { flag: 'player_gracchan' }, { standing: { who: 'player', kind: 'people', value: 12, label: 'Stood with Gaius on the Aventine' } }, { standing: { who: 'player', kind: 'boni', value: -15, label: 'Stood with Gaius on the Aventine' } }, { memory: { owner: '@opimius', about: 'player', act: 'Took up arms against me', weight: -40, halfLife: 0 } }, { lean: 'player', add: -0.15 }],
+          success: [...KILL_GAIUS, { flag: 'player_gracchan' }, { standing: { who: 'player', kind: 'people', value: 12, label: 'Stood with Gaius on the Aventine' } }, { standing: { who: 'player', kind: 'boni', value: -15, label: 'Stood with Gaius on the Aventine' } }, { memory: { owner: 'consul', about: 'player', act: 'Took up arms against me', weight: -40, halfLife: 0 } }, { lean: 'player', add: -0.15 }],
           failure: [...KILL_GAIUS, { kill: 'player', cause: 'killed on the Aventine with the followers of Gaius Gracchus' }],
           successText: 'When the archers come you go over a garden wall and down through the potteries to the river. Behind you they are killing everyone they catch. Gaius is dead across the Tiber. You live.',
           failureText: 'The archers come first, and then the slaves with clubs.',
@@ -411,13 +423,15 @@ export const EVENTS: EventDef[] = [
     title: 'News from Rome',
     when: { all: [{ flag: 'scu' }, { alive: '@c_gracchus' }, away, { noFlag: 'aventine_done' }] },
     hazard: 0.5,
+    roles: { consul: { pick: hardlineConsul, best: { lean: 'it' } } },
+    needs: ['consul'],
     text: 'Gaius Gracchus killed.',
     immediate: [{ flag: 'aventine_done' }, ...KILL_GAIUS],
   },
   {
     id: 'opimius_tried',
     title: 'Opimius on trial',
-    when: { all: [{ flag: 'gaius_dead' }, { year: [120, 120] }, { alive: '@opimius' }, { after: [120, 0, 20] }] },
+    when: { all: [{ flag: 'gaius_dead' }, { year: [120, 120] }, { alive: '@opimius' }, { charFlag: '@opimius', key: 'killed_gaius' }, { after: [120, 0, 20] }] },
     hazard: 0.02,
     text: 'Opimius prosecuted for killing citizens without trial.',
     immediate: [{ news: 'The tribune Decius has prosecuted Opimius before the people for killing citizens without trial. His defender is Carbo — Carbo, who was Tiberius’s friend. Opimius says he did what the Senate asked. The people acquit him.', truth: 'true', delay: 0 }, { memory: { owner: { select: 'adultMen', where: { num: { lean: 'it' }, lte: -0.4 } }, about: '@carbo', act: 'Defended Opimius', weight: -25, halfLife: 3000 } }],
@@ -461,6 +475,33 @@ export const EVENTS: EventDef[] = [
           failure: [{ callLoans: { lender: '@aufidius', borrower: 'player.father' } }, { trigger: 'father_loan_called', delay: 6 }],
           successText: 'You tell him you will see him in court. He laughs, and pats your arm, and lets it go. It seems he was bluffing.',
           failureText: 'You tell him you will see him in court. Within the week a letter comes from Arpinum: {creditor} has called in your father’s loan.',
+        },
+      },
+    ],
+  },
+  {
+    id: 'creditor_warning_own',
+    hook: 'case_opened',
+    title: 'A word from the bankers’ stalls',
+    when: { all: [{ same: ['prosecutor', 'player'] }, { tie: ['@aufidius', 'defendant'], kind: 'amicus' }, { num: { debtTo: ['player', '@aufidius'] }, gte: 1 }] },
+    player: true,
+    roles: { creditor: '@aufidius' },
+    vars: { debt: { debtTo: ['player', '@aufidius'] } },
+    text: [
+      '{creditor} stops you outside the Basilica Porcia, smiling, and walks with you a little way.',
+      '{defendant} is an old friend of his, he says. A generous man. He would hate to see a promising young man make an enemy like that — or to have to think about the HS {var:debt} you owe him, which he has always been happy to roll over.',
+    ],
+    choices: [
+      { label: 'Drop the case', effects: [{ signal: 'drop_case' }, { memory: { owner: '@aufidius', about: 'player', act: 'Took my advice', weight: 10 } }], text: 'You let it be known you are withdrawing the charge. {creditor} sends a basket of figs.' },
+      {
+        label: 'Press on with the prosecution',
+        effects: [{ memory: { owner: '@aufidius', about: 'player', act: 'Ignored my warning', weight: -15, halfLife: 2000 } }],
+        risk: {
+          chance: { base: 0.45, label: 'He may be bluffing', mods: [{ label: 'His regard for you', add: { mul: [{ opinion: ['@aufidius', 'player'] }, 0.006] } }], min: 0.05, max: 0.95 },
+          success: [],
+          failure: [{ callLoans: { lender: '@aufidius', borrower: 'player' } }],
+          successText: 'You tell him you will see him in court. He laughs, pats your arm, and lets it go. It seems he was bluffing.',
+          failureText: 'You tell him you will see him in court. The next morning his freedman brings a note: the loan is called. You have thirty days to find HS {var:debt}.',
         },
       },
     ],

@@ -10,7 +10,7 @@ export const round = (x: number, d = 0) => {
 };
 
 export function breakdown(parts: { label: string; value: number }[], lo = -Infinity, hi = Infinity): Breakdown {
-  const kept = parts.filter((p) => Math.abs(p.value) >= 0.05);
+  const kept = parts.filter((p) => p.value !== 0);
   const sum = kept.reduce((a, p) => a + p.value, 0);
   return { total: clamp(sum, lo, hi), parts: kept };
 }

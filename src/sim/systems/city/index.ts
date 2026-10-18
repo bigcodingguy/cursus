@@ -163,9 +163,9 @@ export function bankers(s: GameState): Character[] {
 export function creditLimit(s: GameState, who: CharId): number {
   const c = s.chars[who];
   const father = c.fatherId ? s.chars[c.fatherId] : undefined;
-  const fam = father?.alive ? netWorth(s, father.id) * 0.1 : 0;
-  const own = Math.max(0, netWorth(s, who)) * 0.4;
-  return Math.max(0, Math.round((30000 + fam + own + standingOf(s, who, 'dignitas').total * 1500) / 1000) * 1000 - debtOf(s, who));
+  const fam = father?.alive ? Math.max(0, netWorth(s, father.id)) * 0.03 : 0;
+  const own = Math.max(0, netWorth(s, who)) * 0.12;
+  return Math.max(0, Math.round((15000 + fam + own + standingOf(s, who, 'dignitas').total * 1000) / 1000) * 1000 - debtOf(s, who));
 }
 
 export const city: SystemDef = {
@@ -331,8 +331,8 @@ export const city: SystemDef = {
           emit(s, 'memory', { owner: c.id, about: a.id, act: agrees ? 'Spoke on the right side' : 'Spoke on the wrong side', weight: agrees ? 3 : -3, halfLife: 700 });
         }
         if (a.id === s.playerId)
-          emit(s, 'log', { text: ok ? `You speak on ${issue.label.toLowerCase()} and the crowd hears you out.` : `You speak on ${issue.label.toLowerCase()}. They talk over you and drift away.`, kind: 'player' });
-        else if (ok && chance(s.rng, 0.3)) emit(s, 'news', { text: `${shortName(a)} spoke at a contio on ${issue.label.toLowerCase()}, and spoke well.`, about: [a.id] });
+          emit(s, 'log', { text: ok ? `You speak at a contio (${issue.label}) and the crowd hears you out.` : `You speak at a contio (${issue.label}). They talk over you and drift away.`, kind: 'player' });
+        else if (ok && a.rank === 'senator' && chance(s.rng, 0.08)) emit(s, 'news', { text: `${shortName(a)} spoke well at a contio. The question: ${issue.label}.`, about: [a.id] });
       },
       npc: (s, a) => {
         if (ageOf(s, a) < 22 || a.rank === 'plebs') return [];
@@ -421,7 +421,7 @@ export const city: SystemDef = {
     if (s.routine === 'attend') {
       const pat = pl.patronId ? s.chars[pl.patronId] : undefined;
       if (pat?.alive && pat.location === 'rome') {
-        emit(s, 'memory', { owner: pat.id, about: pl.id, act: 'Attends my salutatio', weight: 0.25, halfLife: 120 });
+        emit(s, 'memory', { owner: pat.id, about: pl.id, act: 'Attends my salutatio', weight: 0.08, halfLife: 120 });
         emit(s, 'skill', { who: pl.id, skill: 'law', add: 0.015 });
         emit(s, 'skill', { who: pl.id, skill: 'oratory', add: 0.008 });
         if (pat.lean > 0.3) emit(s, 'standing', { who: pl.id, kind: 'boni', value: 0.03, label: `In the train of ${shortName(pat)}` });
