@@ -34,9 +34,8 @@ Acceptance moments verified (in bot runs and in my own UI playthrough):
 - Playthrough: I played 133–129 BC through the UI in headless Chromium (patron choice, the veto and deposition votes, the Capitol, service in Spain/Sicily, contio speeches, a prosecution with the creditor’s threat, trial, borrowing, Scipio’s death) and fixed what broke.
 
 ## Deploy
-- CI (`.github/workflows/ci.yml`) is green on the working branch.
-- GitHub Pages (`.github/workflows/deploy.yml`) builds and tests fine but cannot publish: Pages is not enabled for the repository (it is private; Pages on a private repo needs a paid GitHub plan, otherwise the repo must be public). Once Blake enables Pages with source “GitHub Actions”, re-run the workflow; the site will be at https://bigcodingguy.github.io/cursus/ . If the `github-pages` environment only allows `main`, merge the branch to `main`.
-- Meanwhile the same build is published as a private claude.ai artifact: https://claude.ai/artifact/Bkug8jpRPE4FyivAZYDozg (saves stay in the browser; the “download save file” button does not work inside the artifact frame).
+- Live at https://bigcodingguy.github.io/cursus/ (GitHub Pages, deployed from `main` by `.github/workflows/deploy.yml`; the `github-pages` environment only accepts `main`).
+- CI (`.github/workflows/ci.yml`) runs on every push.
 
 ## Known issues / rough edges
 - Placeholder art throughout (by design until Phase 4).
